@@ -1,0 +1,12 @@
+name: polarisation_model
+dependencies:
+  - python>=3.8
+  - numpy
+  - scipy
+  - pip
+  - flake8
+  - pylint
+  - black
+  - mypy
+  - jupyter
+  - matplotlib
