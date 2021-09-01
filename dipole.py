@@ -57,26 +57,30 @@ class dipole:
             # used after that. In reality since calculating the actual entrance
             # pupil might be hard, I might just completely overfill the pupil
             # and lose rays along the way (not very efficient but hey)
-            E_vec, E_mag = getEfield(theta_p, phi_p)
-            self.ray.E_vec = getEfield(theta_p)
+            E_vec, E_mag = getEfield(theta, phi)
+            self.ray.E_vec = getEfield(theta)
             self.ray.E_mag = E_mag  # prefactor
             self.ray.k_vec = [ 
                 np.sin(theta)*np.cos(phi),\
                 np.sin(theta)*np.sin(phi),\
                 np.cos(theta)
             ]
+            ## now get polarisation: E vector relative to k, only azimuthal
             # convert E and k to useful things for the ray
+            # i.e. do Rz and Ry coord transforms, if they're correct, Ez should be
+            # zero in the new coords
             
 
             ray = Ray(self.lda_exc, polarisation, direction, magnitude)
 
-    def generate_pupil_rays(self, )
+    def generate_pupil_rays(self):
+        pass
     
 
 class complex_dipole(dipole):
     """Includes beta, time correlation/lifetime, spectral fluoresence"""
     def __init__(
-        self, phi, theta, lda_em=None, lda_exc=None, beta=0, lifetime=None
+        self, phi, theta, lda_em=None, lda_exc=None, beta=0, lifetime=None,
         correlation=None) -> None:
         """dipole class to simulate a dipole emitter
         Arguments:

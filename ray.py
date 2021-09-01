@@ -8,15 +8,15 @@ class Ray:
         """
         Arguments:
         lda <float> -- wavelength of ray
-        k_vec <ndarray> -- ray direction [x y z] in terms of polar coords phi
+        direction <ndarray> -- ray direction [x y z] in terms of polar coords phi
                            (yz plane), theta (from z e.g. in xz plane if y=0)
-        E_vec <ndarray> -- E field vector [x y z] in terms of polar coords phi, theta
+        polarisation <ndarray> -- E field vector [x y z] relative to direction
 
         Methods:
         """
         self.lda = lda
-        self.E_vec = E_vec
-        self.k_vec = k_vec
+        # self.E_vec = E_vec
+        # self.k_vec = k_vec
 
         # convert these into 
 
