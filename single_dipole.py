@@ -7,8 +7,8 @@ import dipole as dipole
 from plot_single_dipole import plot_single_dipole
 from tools import printif  # is the name tools a little dangerous? conflicts etc
 
-def simulate_single_dipole(dipole_phi, dipole_theta, plot_pupil=None\
-     save_dir=None, show_prints=False):
+def simulate_single_dipole(dipole_phi, dipole_theta, plot_pupil=None,
+          save_dir=None, show_prints=False):
      single_dipole = dipole.dipole(dipole_phi, dipole_theta) # phi then theta
 
      pupil_sin_theta_range = np.linspace(0,1,50)
