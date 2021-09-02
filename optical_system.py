@@ -6,6 +6,13 @@ class OpticalSystem():
     Angles angle_x and angle_y are angle relative to last optical element: e.g.
     If there is a mirror to reflect the beam by 90 degrees, the element
     after the beam has angle_y (probably angle_y) = 90 degrees
+
+    angle is measured anticlockwise around axis, thre are two angles:
+    placement_angles -> angle at which object is placed from the next, basically
+        a relative coordinate system that makes it easier to redefine optical axis
+    rotation_angles -> angle that the object is oriented in these relative coordinates
+
+
     """
     def __init__(self, name="system1"):
         self.name = name
@@ -25,6 +32,8 @@ class OpticalSystem():
             dz = el['dz']
             angle_y = el['angle_y']*np.pi/180
             angle_x = el['angle_x']*np.pi/180
+
+            # from inverse coordinate transform from relative to absolute position
             dx_absolute = dx * np.cos(angle_y) - dz * np.sin(angle_y)
             dy_absolute = dx * np.sin(angle_x)*np.sin(angle_y) + dy * np.cos(angle_x)\
                 + dz * np.sin(angle_x)*np.cos(angle_y)
@@ -39,23 +48,20 @@ class OpticalSystem():
                 {'dx': current_pos[0], 'dy': current_pos[1], 'dz': current_pos[2],
                  'angle_x': current_angle[0], 'angle_y': current_angle[1]}
             )
-            self.elememt.
 
     def add_dipole_source(self):
         pass
 
-    def add_thin_lens(self, dz, f, diameter, angle_y=0, angle_x=0, dx=0, dy=0):
-        """angles supplied as degrees, we work in radians"""
-        angle_x = angle_x*180/np.pi
-        angle_y = angle_y*180/np.pi
+    def add_thin_lens(self, dz, f, diameter, angle_y=0, angle_x=0, rotation dx=0, dy=0):
+        """angles supplied as degrees"""
+
         element = optical_elements.ThinLens(f, diameter)
         element.coords = {'dz': dz, 'dx': dx, 'dy': dy, 'angle_x':angle_x, 'angle_y':angle_y}
 
         self.element_list.append(element)
 
     def add_objective(self, magnification, NA,  angle_y=0, angle_x=0, dx=0, dy=0):
-        angle_x = angle_x*180/np.pi
-        angle_y = angle_y*180/np.pi
+
         pass
 
     def add_tube_lens(self, dz, f):
@@ -68,18 +74,14 @@ class OpticalSystem():
         it would be annoying having to deal with the relative angle between
         the last element being changed after the tilted mirror in dOPM
         """
-        angle_x = angle_x*180/np.pi
-        angle_y = angle_y*180/np.pi
         pass
 
     def add_polariser(self, dz, diameter, angle, angle_x=0, angle_y=0, dx=0, dy=0):
-        angle_x = angle_x*180/np.pi
-        angle_y = angle_y*180/np.pi
+
         pass
 
     def add_waveplate(self, relative_phase, angle_x=0, angle_y=0):
-        angle_x = angle_x*180/np.pi
-        angle_y = angle_y*180/np.pi
+
         """pi/2 = quarter waveplate"""
         pass
 
