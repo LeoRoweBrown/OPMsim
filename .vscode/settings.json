@@ -1,3 +1,4 @@
 {
-    "python.pythonPath": "C:\\Users\\Leo\\anaconda3\\envs\\polarisation_model\\python.exe"
+    "python.pythonPath": "C:\\Users\\Leo\\anaconda3\\envs\\polarisation_model\\python.exe",
+    "jupyter.jupyterServerType": "local"
 }
