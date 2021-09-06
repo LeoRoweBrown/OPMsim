@@ -25,7 +25,7 @@ class OpticalSystem():
         origin_angle = [0, 0]  # angle_x, angle_y
         current_angle = origin_angle
         self.element.coords_absolute = []
-        for n in len(els):
+        for n in range(len(els)):
             el = els[n]
             dx = el['dx']
             dy = el['dy']
@@ -52,11 +52,16 @@ class OpticalSystem():
     def add_dipole_source(self):
         pass
 
-    def add_thin_lens(self, dz, f, diameter, angle_y=0, angle_x=0, rotation dx=0, dy=0):
+    def add_thin_lens(self, dz, f, diameter, angle_y=0, angle_x=0,
+        rotation_y=0, rotation_x=0, dx=0, dy=0):
         """angles supplied as degrees"""
 
         element = optical_elements.ThinLens(f, diameter)
-        element.coords = {'dz': dz, 'dx': dx, 'dy': dy, 'angle_x':angle_x, 'angle_y':angle_y}
+        element.coords = {
+            'dz': dz, 'dx': dx, 'dy': dy,
+            'angle_x':angle_x, 'angle_y':angle_y,
+            'rotation_y': rotation_y, 'rotation_x': rotation_x
+            }
 
         self.element_list.append(element)
 

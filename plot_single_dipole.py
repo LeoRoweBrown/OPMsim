@@ -18,6 +18,9 @@ def plot_single_dipole(angles, data, dipole_angles, save_dir = None):
     #Create a polar projection
     ax1 = fig.add_subplot(131, projection="polar")
     # pc1 = ax1.pcolormesh(pupil_phi_range,pupil_sin_theta_range,data_x.T, shading='auto')
+    print(pupil_phi_range.size)
+    print(pupil_sin_theta_range.size)
+    print(data_intensity_x.T.size)
     pc1 = ax1.pcolormesh(pupil_phi_range,pupil_sin_theta_range,data_intensity_x.T,\
          shading='auto', vmin=0,vmax=1)
 
