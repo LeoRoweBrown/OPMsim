@@ -37,15 +37,28 @@ class Dipole:
         self.p_vec = [ np.cos(theta)*np.cos(phi), np.cos(theta)*np.sin(phi), \
             np.sin(theta)]
     
-    def getEfield_z(self, theta, phi, dx, dy, z):
-        """propagate the E-field to z position at angle (theta_p, phi_p) in
-           the pupil coordinates (?), dx and dy represent a shift in the
-           dipole position in positive dx and dy directions, and E-field is evaluated
-           at a distance z along optical axis. 
+    def getEfield_z(self, theta, phi, z=1, dx=0, dy=0, dz=0):
+        """ PROBABLY WONT BE USED 
+        propagate the E-field to z position at angle (theta, phi) in
+        pupil coordinates, (not same theta as dipole) with dipole
+        position (dx, dy, dz) from optical axis.
+        z is distance along optical axis to pupil, e.g. working distance of objective.
+        Arguments:
+            phi <float> -- azimuthal angle, rotation about z axis [rad]
+                           clockwise when looking along positive z (into paper)
+            theta <float> -- polar angle measured from z axis [rad].
+            z <float> (1.0) -- distance from source to pupil in z (along optical axis) [m]
+            dx <float> (0.0) -- displacement of source from optical axis in x [m]
+            dy <float> (0.0) -- displacement of source from optical axis in y [m]
+            dz <float> (0.0) -- displacement of source from optical axis in z [m]
+        Returns:
+            (E_vec, E_mag, n_vec) -- Electric field vector, Electric field prefactor
+                                     (depends on propagation distance and wavelength)
+                                     and propagation direction
         """
         # E = (e^ikr/r)k^2(n x p) x n
         # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
-        n_vec = [ np.sin(theta)*np.cos(phi) - dx, np.sin(theta)*np.sin(phi) - dy, z]
+        n_vec = [z*np.tan(theta)*np.cos(phi)-dx, z*np.tan(theta)*np.sin(phi)-dy, z-dz]
         n_x_p = np.cross(n_vec,self.p_vec)
         k = 2*np.pi/self.lda_exc 
 
@@ -53,13 +66,15 @@ class Dipole:
         n_vec /= r  # normalise
  
         E_vec = np.cross(n_x_p, n_vec)
-        E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
-        return (E_vec, E_mag)
+        E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)?
+        return (E_vec, E_mag, n_vec)
 
 
-    def getEfield(self, theta, phi, r) -> np.ndarray:
+    def getEfield(self, theta, phi, r, curved_coords=True) -> np.ndarray:
         """propagate the E-field along r for an angle (theta_p, phi_p) in
-           the pupil coordinates (?)
+           the pupil coordinates (?).
+           Curved coords evaluates field perpendicular to ray and tangential to
+           curved surface of pupil
         """
         # E = (e^ikr/r)k^2(n x p) x n
         # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
@@ -70,10 +85,23 @@ class Dipole:
  
         E_vec = np.cross(n_x_p, n_vec)
         E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
+
+        if curved_coords:
+            E_vec = self._rotate_efield(E_vec, theta, phi) 
+
         return (E_vec, E_mag)
     
-    def new_ray(self, theta, phi, r):
-        """calculate new E-field based on propagation vector r_vec"""
+    def _rotate_efield(E_vec, theta, phi):
+        E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) - E_vec[1]*np.sin(phi)\
+            + E_vec[2]*np.cos(phi)*np.sin(theta)
+        E_y_tf = E_vec[0]*np.sin(phi)*np.cos(theta) + E_vec[1]*np.cos(phi)\
+            + E_vec[2]*np.sin(phi)*np.sin(theta)
+        E_z_tf = -E_vec[0]*np.sin(theta) + E_vec[2]*np.cos(phi)  # should equal 0
+        E_rot = [E_x_tf, E_y_tf, E_z_tf]
+        return E_rot
+
+    def new_ray(self, theta, phi, z):
+        """calculate new E-field based on position in pupil at z defined by (theta, phi) and dipole position (dx dy dz)"""
         if not self.ray.exists():
             # use getEfield to calculate the E field based on a propagation vector
             # and the dipole distribution, i.e. this is used for the calculation
@@ -81,26 +109,21 @@ class Dipole:
             # used after that. In reality since calculating the actual entrance
             # pupil might be hard, I might just completely overfill the pupil
             # and lose rays along the way (not very efficient but hey)
-            E_vec, E_mag = self.getEfield(theta, phi)
-            k_vec = [ 
-                np.sin(theta)*np.cos(phi),\
-                np.sin(theta)*np.sin(phi),\
-                np.cos(theta)
-            ]
+
+            # z = working distance if first element in ray tracing is objective
+            E_vec, E_mag, k_vec = self.getEfield_z(theta, phi, z)
+
             ## now get polarisation: E vector relative to k, only azimuthal
             # convert E and k to useful things for the ray
             # i.e. do Rz and Ry coord transforms, if they're correct, Ez should be
             # zero in the new coords, make a func for this?
-            E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) - E_vec[1]*np.sin(phi)\
-                + E_vec[2]*np.cos(phi)*np.sin(theta)
-            E_y_tf = E_vec[0]*np.sin(phi)*np.cos(theta) + E_vec[1]*np.cos(phi)\
-                + E_vec[2]*np.sin(phi)*np.sin(theta)
-            E_z_tf = -E_vec[0]*np.sin(theta) + E_vec[2]*np.cos(phi)  # should equal 0
-            magnitude = (E_x_tf**2 + E_y_tf**2 + E_z_tf**2)**0.5
-            polarisation = \
-                [E_x_tf, E_y_tf, E_z_tf]/magnitude
 
-            ray = Ray(self.lda_exc, polarisation, k_vec, magnitude)
+            E_vec = self._rotate_efield(E_vec, theta, phi)
+            magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
+            polarisation = \
+                E_vec/magnitude
+
+            ray = Ray(self.lda_exc, polarisation, k_vec, magnitude, E_mag)
 
     def generate_pupil_rays(self):
         pass
