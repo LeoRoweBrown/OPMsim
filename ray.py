@@ -4,7 +4,7 @@ class Ray:
     """ray class for ray tracing once initial E and k vectors are passed,
     these are calculated by getEfield in the dipole class - the idea is to
     evaluate the field at the entrance pupil and trace from there"""
-    def __init__(self, lda, polarisation, direction, magnitude):
+    def __init__(self, lda, polarisation, direction, magnitude, prefactor):
         """
         Arguments:
         lda <float> -- wavelength of ray
@@ -24,6 +24,7 @@ class Ray:
         self.polarisation = polarisation  # only azimuthally polarisation considered
         self.direction = direction
         self.magnitude = magnitude
+        self.prefactor = prefactor
         self.ray_history = []
 
     def propagate(self, r):
