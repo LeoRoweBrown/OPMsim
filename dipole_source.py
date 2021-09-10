@@ -58,6 +58,13 @@ class DipoleSource:
         ax.set_box_aspect((1,1,1))
         plt.show()
 
+        f2d = plt.figure()
+        ax_xz = f2d.add_subplot(211)
+        ax_xz.scatter(x,z)
+        ax_xy = f2d.add_subplot(212)
+        ax_xy.scatter(x,y)
+        plt.show()
+
         printif("Generating %d dipoles" % dipole_count, show_prints)   
         for n in range(dipole_count):
             
