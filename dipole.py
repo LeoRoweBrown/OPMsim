@@ -89,9 +89,9 @@ class Dipole:
         if curved_coords:
             E_vec = self._rotate_efield(E_vec, theta, phi) 
 
-        return (E_vec, E_mag)
+        return (E_vec, E_mag, n_vec)
     
-    def _rotate_efield(E_vec, theta, phi):
+    def _rotate_efield(self, E_vec, theta, phi):
         E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) - E_vec[1]*np.sin(phi)\
             + E_vec[2]*np.cos(phi)*np.sin(theta)
         E_y_tf = E_vec[0]*np.sin(phi)*np.cos(theta) + E_vec[1]*np.cos(phi)\
@@ -111,7 +111,7 @@ class Dipole:
             # and lose rays along the way (not very efficient but hey)
 
             # z = working distance if first element in ray tracing is objective
-            E_vec, E_mag, k_vec = self.getEfield_z(theta, phi, z)
+            E_vec, E_mag, k_vec = self.getEfield(theta, phi, z)
 
             ## now get polarisation: E vector relative to k, only azimuthal
             # convert E and k to useful things for the ray
@@ -153,7 +153,7 @@ class Dipole:
         i = 0
         for t_i, theta in enumerate(pupil_theta_range):
             for p_i, phi in enumerate(pupil_phi_range):
-                e_vec, e_mag = self.getEfield(theta, phi, r)
+                e_vec, e_mag, k_vec = self.getEfield(theta, phi, r)
                 # print(e_vec)
                 # print('######')
                 pupil_vals_x[t_i, p_i] = e_vec[0]
@@ -233,21 +233,6 @@ class ComplexDipole(Dipole):
         # angles given with theta measured from x not z so cos(theta) <-> sin(theta)
         self.p_vec = [ np.cos(theta)*np.cos(phi), np.cos(theta)*np.sin(phi), \
             np.sin(theta)]
-    
-    def getEfield(self, theta_p, phi_p, r) -> np.ndarray:
-        """propagate the E-field along r for an angle (theta_p, phi_p) in
-           the pupil coordinates (?)
-        """
-        # E = (e^ikr/r)k^2(n x p) x n
-        # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
-        n_vec = [ np.sin(theta_p)*np.cos(phi_p), np.sin(theta_p)*np.sin(phi_p), \
-            np.cos(theta_p)]
-        n_x_p = np.cross(n_vec,self.p_vec)
-        k = 2*np.pi/self.lda_exc 
- 
-        E_unitvec = np.cross(n_x_p, n_vec)
-        E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
-        return (E_unitvec, E_mag)
 
     def depolarise(self, direction=None):
         """only considers rotation in one dimension (for now? okay who am I kidding)
