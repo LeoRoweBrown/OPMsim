@@ -87,17 +87,24 @@ class Dipole:
         E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
 
         if curved_coords:
-            E_vec = self._rotate_efield(E_vec, theta, phi) 
+            # phi = 0 we preserve x and y
+            E_vec = self._rotate_efield(E_vec, theta, phi)
+            # should E_z really be zero? Non TEM modes in air? No
+            if E_vec[2]**2 > 1e-3*(E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2):
+                print("Ez =", E_vec[2], "Ex =", E_vec[0], "E_y =", E_vec[1])
+                raise Exception("E_z is not zero in ray's frame!")
 
         return (E_vec, E_mag, n_vec)
     
     def _rotate_efield(self, E_vec, theta, phi):
         E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) - E_vec[1]*np.sin(phi)\
             + E_vec[2]*np.cos(phi)*np.sin(theta)
-        E_y_tf = E_vec[0]*np.sin(phi)*np.cos(theta) + E_vec[1]*np.cos(phi)\
-            + E_vec[2]*np.sin(phi)*np.sin(theta)
-        E_z_tf = -E_vec[0]*np.sin(theta) + E_vec[2]*np.cos(phi)  # should equal 0
+        E_y_tf = E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+        # E_z_tf should equal 0
+        E_z_tf = -E_vec[0]*np.sin(theta)*np.cos(phi)\
+            + E_vec[1]*np.sin(theta)*np.cos(phi) + E_vec[2]*np.cos(theta) 
         E_rot = [E_x_tf, E_y_tf, E_z_tf]
+
         return E_rot
 
     def new_ray(self, theta, phi, z):
@@ -119,6 +126,9 @@ class Dipole:
             # zero in the new coords, make a func for this?
 
             E_vec = self._rotate_efield(E_vec, theta, phi)
+            if E_vec[2]**2 > 1e-4*(E_vec[0]**2 + E_vec[1]**2):
+                print("Ez = ", E_vec[2])
+                raise Exception("E_z is not zero in ray's frame!")
             magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
             polarisation = \
                 E_vec/magnitude
