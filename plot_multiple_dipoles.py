@@ -13,6 +13,7 @@ def plot_random_dipole_source(NA, dipole_count, save_dir=None,
 
     title = "Radiation distribution in pupil for %d randomly distributed dipoles"\
         % (dipole_count)
+    file_name = 'multi_dipole_pupil_N_%d.png' % dipole_count
     plot_pupil(title, angles, data_intensity_x, data_intensity_y, save_dir, file_name)
  
 def plot_aligned_source(NA, theta, phi, save_dir=None, dipole_count=1):
@@ -90,7 +91,7 @@ def plot_pupil(title, angles, data_intensity_x, data_intensity_y, save_dir=None,
             print("No directory, %s, making it" % save_dir)
             os.makedirs(save_dir)
         full_save_path = os.path.join(save_dir, \
-            'multi_dipole_pupil.png')
+            file_name)
         fig.savefig(full_save_path, bbox_inches='tight')
     plt.close(fig)
     

@@ -96,16 +96,35 @@ class Dipole:
 
         return (E_vec, E_mag, n_vec)
     
-    def _rotate_efield(self, E_vec, theta, phi):
-        E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) - E_vec[1]*np.sin(phi)\
-            + E_vec[2]*np.cos(phi)*np.sin(theta)
-        E_y_tf = E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+    def _rotate_efield(self, E_vec, theta_polar, phi):
+
+        E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta_polar) + \
+            E_vec[1]*np.sin(phi)*np.cos(theta_polar)\
+            - E_vec[2]*np.sin(theta_polar)
+        E_y_tf = -E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
         # E_z_tf should equal 0
-        E_z_tf = -E_vec[0]*np.sin(theta)*np.cos(phi)\
-            + E_vec[1]*np.sin(theta)*np.cos(phi) + E_vec[2]*np.cos(theta) 
+        E_z_tf = E_vec[0]*np.sin(theta_polar)*np.cos(phi)\
+            + E_vec[1]*np.sin(theta_polar)*np.sin(phi) + E_vec[2]*np.cos(theta_polar)
         E_rot = [E_x_tf, E_y_tf, E_z_tf]
 
         return E_rot
+        """
+        gamma = np.arcsin(np.sin(theta_polar)*np.sin(phi))
+        theta = np.arcsin(np.sin(theta_polar)*np.cos(phi))
+        E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) +\
+            E_vec[1]*np.sin(phi)*np.cos(theta) -\
+            E_vec[2]*np.sin(theta)
+        E_y_tf = E_vec[0]*(np.cos(phi)*np.sin(theta)*np.sin(gamma) - np.sin(phi)*np.cos(gamma)) +\
+            E_vec[1]*(np.sin(phi)*np.sin(theta)*np.sin(gamma) + np.cos(phi)*np.cos(gamma)) +\
+            E_vec[2]*(np.cos(theta)*np.sin(gamma))
+        # E_z_tf should equal 0
+        E_z_tf = E_vec[0]*(np.cos(phi)*np.sin(theta)*np.cos(gamma) + np.sin(phi)*np.sin(gamma)) +\
+            E_vec[1]*(np.sin(phi)*np.sin(theta)*np.cos(gamma) - np.cos(phi)*np.sin(gamma)) +\
+            E_vec[2]*np.cos(theta)*np.cos(gamma) 
+        E_rot = [E_x_tf, E_y_tf, E_z_tf]
+
+        return E_rot
+        """
 
     def new_ray(self, theta, phi, z):
         """calculate new E-field based on position in pupil at z defined by (theta, phi) and dipole position (dx dy dz)"""

@@ -34,11 +34,11 @@ def simulate_single_dipole(dipole_phi, dipole_theta, NA, dipole_obj=None, plot_p
      phi_list = np.zeros([len(pupil_theta_range) * len(pupil_phi_range)])
      sin_theta_list = np.zeros([len(pupil_theta_range) * len(pupil_phi_range)])
 
-     # evaluate the field across the pupil
+     # evaluate the field across the curved pupil
      i = 0
      for t_i, theta in enumerate(pupil_theta_range):
           for p_i, phi in enumerate(pupil_phi_range):
-               e_vec, e_mag = single_dipole.getEfield(theta, phi, 1)
+               e_vec, e_mag, k_vec = single_dipole.getEfield(theta, phi, 1)
                # print(e_vec)
                # print('######')
                pupil_vals_x[t_i, p_i] = e_vec[0]
