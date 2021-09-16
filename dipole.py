@@ -7,15 +7,14 @@ from scipy.interpolate import griddata
 
 class Dipole:
     def __init__(
-        self, phi, theta, lda_em=None, lda_exc=None) -> None:
+        self, phi_d, alpha_d, lda_em=None, lda_exc=None) -> None:
         """dipole class to simulate a dipole emitter
         Note: everything is in radians, but the optical system is in degrees
         Is this confusing?
         Arguments:
-            phi <float> -- azimuthal angle, rotation about z axis [rad]
+            phi_d <float> -- azimuthal angle, rotation about z axis [rad]
                            clockwise when looking along positive z (into paper)
-            theta <float> -- angle of dipole from x axis (note that ray calculations
-                     use a different convention - measuring theta from z) [rad].
+            alpha_d <float> -- angle of dipole from x axis [rad].
             lda_em <float> -- emission of fluorophore/dipole 
                               (to be implemented) [nm]
             lda_exc <float> -- excitaiton of fluorophore/dipole (used)
@@ -26,16 +25,20 @@ class Dipole:
         if lda_exc is None:
             lda_exc = 500e-9  # should be a distribution at some point
 
-        self.theta = (theta + np.pi/2) % (2*np.pi)  # 'theta' for rays (from x axis)
-        self.theta_dipole_coords = theta  # 'theta' definition for dipole (from y axis)
-        self.phi = phi
+        # self.theta = (theta + np.pi/2) % (2*np.pi)  # 'theta' for rays (from x axis)
+        self.alpha_d = alpha_d
+        # self.theta_dipole_coords = theta  # 'theta' definition for dipole (from y axis)
+        self.phi_d = phi_d
         self.lda_em = lda_em
         self.lda_exc = lda_exc
+        # expression of p has polar angle measured from z not x
+        alpha_90deg = (alpha_d + np.pi/2) % (2*np.pi)
 
         # get dipole angle
         # angles given with theta measured from x not z so cos(theta) <-> sin(theta)
-        self.p_vec = [ np.cos(theta)*np.cos(phi), np.cos(theta)*np.sin(phi), \
-            np.sin(theta)]
+        self.p_vec = [ np.cos(alpha_d)*np.cos(phi_d),\
+            np.cos(alpha_d)*np.sin(phi_d), \
+            np.sin(alpha_d)]
     
     def getEfield_z(self, theta, phi, z=1, dx=0, dy=0, dz=0):
         """ PROBABLY WONT BE USED 
@@ -71,10 +74,12 @@ class Dipole:
 
 
     def getEfield(self, theta, phi, r, curved_coords=True) -> np.ndarray:
-        """propagate the E-field along r for an angle (theta_p, phi_p) in
+        """propagate the E-field along r for an angle (theta, phi) in
            the pupil coordinates (?).
            Curved coords evaluates field perpendicular to ray and tangential to
-           curved surface of pupil
+           curved surface of pupil - NOTE: x and y basis is also rotated, so
+           when evalulating polarisation convert back with 
+           get_polarisation_xy_basis
         """
         # E = (e^ikr/r)k^2(n x p) x n
         # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
@@ -94,10 +99,17 @@ class Dipole:
                 print("Ez =", E_vec[2], "Ex =", E_vec[0], "E_y =", E_vec[1])
                 raise Exception("E_z is not zero in ray's frame!")
 
+            # now convert x and y rotated basis back to lab basis for meaningful
+            # polarisation
+            E_vec_x = E_vec[0]*np.cos(phi) + E_vec[1]*np.sin(phi)
+            E_vec_y = -E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+            E_vec[0] = E_vec_x
+            E_vec[1] = E_vec_y
+
         return (E_vec, E_mag, n_vec)
     
     def _rotate_efield(self, E_vec, theta_polar, phi):
-
+        """ changes coordinate system according to k vector so that Ez = 0 """
         E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta_polar) + \
             E_vec[1]*np.sin(phi)*np.cos(theta_polar)\
             - E_vec[2]*np.sin(theta_polar)
@@ -108,23 +120,6 @@ class Dipole:
         E_rot = [E_x_tf, E_y_tf, E_z_tf]
 
         return E_rot
-        """
-        gamma = np.arcsin(np.sin(theta_polar)*np.sin(phi))
-        theta = np.arcsin(np.sin(theta_polar)*np.cos(phi))
-        E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta) +\
-            E_vec[1]*np.sin(phi)*np.cos(theta) -\
-            E_vec[2]*np.sin(theta)
-        E_y_tf = E_vec[0]*(np.cos(phi)*np.sin(theta)*np.sin(gamma) - np.sin(phi)*np.cos(gamma)) +\
-            E_vec[1]*(np.sin(phi)*np.sin(theta)*np.sin(gamma) + np.cos(phi)*np.cos(gamma)) +\
-            E_vec[2]*(np.cos(theta)*np.sin(gamma))
-        # E_z_tf should equal 0
-        E_z_tf = E_vec[0]*(np.cos(phi)*np.sin(theta)*np.cos(gamma) + np.sin(phi)*np.sin(gamma)) +\
-            E_vec[1]*(np.sin(phi)*np.sin(theta)*np.cos(gamma) - np.cos(phi)*np.sin(gamma)) +\
-            E_vec[2]*np.cos(theta)*np.cos(gamma) 
-        E_rot = [E_x_tf, E_y_tf, E_z_tf]
-
-        return E_rot
-        """
 
     def new_ray(self, theta, phi, z):
         """calculate new E-field based on position in pupil at z defined by (theta, phi) and dipole position (dx dy dz)"""
@@ -209,13 +204,13 @@ class Dipole:
 class ComplexDipole(Dipole):
     """Includes beta, time correlation/lifetime, spectral fluoresence"""
     def __init__(
-        self, phi, theta, lda_em=None, lda_exc=None, beta=0, lifetime=None,
+        self, phi_d, alpha_d, lda_em=None, lda_exc=None, beta=0, lifetime=None,
         correlation=None) -> None:
         """dipole class to simulate a dipole emitter
         Arguments:
-            phi <float> -- azimuthal angle, rotation about z axis [rad]
+            phi_d <float> -- azimuthal angle, rotation about z axis [rad]
                            clockwise when looking along positive z (into paper)
-            theta <float> -- angle of dipole from x axis (note that ray calculations
+            alpha_d <float> -- angle of dipole from x axis (note that ray calculations
                      use a different convention - measuring theta from z) [rad].
             lda_em <float> -- emission of fluorophore/dipole 
                               (to be implemented) [nm]
@@ -245,23 +240,26 @@ class ComplexDipole(Dipole):
         # theta_=0 is parallel to optical axis z
 
         # non parallel exc and em dipoles
-        theta = theta + beta
+        self.alpha_exc = alpha_d
+        alpha = alpha_d + beta
 
-        self.theta_dipole_coords = theta  # 'theta' definition for dipole (from y axis)
-        # calculate new theta after diffusion #
+        self.alpha = alpha  # 'theta' definition for dipole (from y axis)
+        # calculate new alpha after diffusion (random sample this? decay stats?) #
         self.depolarise()
 
         # now convert these to the system coordinates
-        self.theta = (theta + np.pi/2) % (2*np.pi)  # 'theta' for rays (from z axis)
+        self.alpha = (alpha_d) % (2*np.pi)  # 'theta' for rays (from z axis)
+        alpha_90deg = (alpha_d + np.pi/2) % (2*np.pi)
         
-        self.phi = phi
+        self.phi_d = phi_d
         self.lda_em = lda_em
         self.lda_exc = lda_exc
 
         # get dipole angle
         # angles given with theta measured from x not z so cos(theta) <-> sin(theta)
-        self.p_vec = [ np.cos(theta)*np.cos(phi), np.cos(theta)*np.sin(phi), \
-            np.sin(theta)]
+        self.p_vec = [ np.cos(alpha_d)*np.cos(phi_d),\
+            np.cos(alpha_d)*np.sin(phi_d), \
+            np.sin(alpha_d)]
 
     def depolarise(self, direction=None):
         """only considers rotation in one dimension (for now? okay who am I kidding)

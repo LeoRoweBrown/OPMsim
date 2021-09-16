@@ -9,10 +9,10 @@ import os
 
 def plot_single_dipole(angles, data, dipole_angles, save_dir = None):
     pupil_phi_range, pupil_sin_theta_range = angles
-    dipole_phi, dipole_theta = dipole_angles
+    dipole_phi, dipole_alpha = dipole_angles
     data_intensity_x, data_intensity_y = data
     data_intensity_sum = data_intensity_x + data_intensity_y
-    dipole_theta_from_y = (dipole_theta - np.pi/2) % (2*np.pi)
+    # dipole_theta_from_y = (dipole_theta - np.pi/2) % (2*np.pi)
 
     fig = plt.figure(figsize=[10,4])
     #Create a polar projection
@@ -30,7 +30,7 @@ def plot_single_dipole(angles, data, dipole_angles, save_dir = None):
     # ax1.pcolormesh(pupil_phi_range,pupil_sin_theta_range,pupil_vals_x, shading='auto')
 
     # dipole arrow length depends on theta?
-    arrow_len = np.abs(0.5*np.sin(dipole_theta))
+    arrow_len = np.abs(0.5*np.cos(dipole_alpha))
 
     flip_phi = (dipole_phi+np.pi) % (2*np.pi)
     # p1 = patches.FancyArrowPatch((flip_phi, arrow_len), (dipole_phi, arrow_len), arrowstyle='<->',\
@@ -67,12 +67,12 @@ def plot_single_dipole(angles, data, dipole_angles, save_dir = None):
     ax3.set_title("X+Y polarisation pupil field distribution")
 
     dipole_phi_deg = dipole_phi*180/np.pi
-    dipole_theta_from_y_deg = dipole_theta_from_y*180/np.pi
+    dipole_alpha_deg = dipole_alpha*180/np.pi
 
     # ax2.set_ylim([0, 1])
     fig.suptitle("Single dipole radiation in pupil for "\
-        + "$\\phi = %.1f^\circ, \\theta_d = %.1f^\circ$" %\
-            (dipole_phi_deg, dipole_theta_from_y_deg))
+        + "$\\phi_d = %.1f^\circ, \\alpha_d = %.1f^\circ$" %\
+            (dipole_phi_deg, dipole_alpha_deg))
 
     fig.tight_layout()
     if save_dir is None:
@@ -81,12 +81,12 @@ def plot_single_dipole(angles, data, dipole_angles, save_dir = None):
         save_dir = os.path.normpath(save_dir)
         print("Saving in %s" % save_dir)
         save_dir_theta = os.path.join(save_dir, 'theta_dipole_%.1f' \
-            % dipole_theta_from_y_deg)
+            % dipole_alpha_deg)
         if not os.path.isdir(save_dir_theta):
             print("No directory, %s, making it" % save_dir_theta)
             os.makedirs(save_dir_theta)
         full_save_path = os.path.join(save_dir_theta, \
-            'single_dipole_theta_%.1f_phi_%.1f.png' %\
-            (dipole_theta_from_y_deg, dipole_phi_deg))
+            'single_dipole_alpha_%.1f_phi_%.1f.png' %\
+            (dipole_alpha_deg, dipole_phi_deg))
         fig.savefig(full_save_path, bbox_inches='tight')
     plt.close(fig)
