@@ -17,21 +17,22 @@ class DipoleSource:
 
         # self.generate_dipoles(dipole_count)
 
-    def add_dipoles(self, theta, phi, dipole_count=1, wavelength=500e-9,
+    def add_dipoles(self, alpha_d, phi_d, dipole_count=1, wavelength=500e-9,
         dx=0, dy=0, dz=0):
         """ 
         Add identical dipoles to the source, doesn't support beta, slow tumbling etc.
-        Angles in degrees, phi and theta are the dipole angles (in the dipole coords)
-        Theta is rotation about y axis measured from x, phi is rotation about z axis
-        with positive phi rotating the dipole from aligned with +x to +y
+        Angles in degrees, phi_d and theta_d are the dipole angles
+        (in the dipole coords). Alpha_d is rotation about y axis measured from x,
+        phi_d is rotation about z axis with positive phi_d rotating the dipole from
+        aligned with +x to +y
         """
         self.dipole_info['lda_exc'].extend(np.ones(dipole_count)*wavelength)
-        self.dipole_info['phi'].extend(np.ones(dipole_count)*phi)
-        self.dipole_info['theta'].extend(np.ones(dipole_count)*theta)
+        self.dipole_info['phi_d'].extend(np.ones(dipole_count)*phi_d)
+        self.dipole_info['alpha_d'].extend(np.ones(dipole_count)*alpha_d)
         self.dipole_info['displacement'].extend((dx, dy, dz))
         
         for n in range(dipole_count):
-            a_dipole = dipole.Dipole(phi, theta, lda_exc=wavelength)
+            a_dipole = dipole.Dipole(phi_d, alpha_d, lda_exc=wavelength)
             self.dipole_ensemble.append(a_dipole)
 
     def generate_dipoles(self, dipole_count, wavelength=500e-9, show_prints=False):
@@ -40,17 +41,17 @@ class DipoleSource:
         doesn't support beta, slow tumbling etc.
         """
 
-        # range is phi 2pi and theta pi
+        # range is phi_d 2pi and alpha_d pi
         self.dipole_info['lda_exc'].extend(np.ones(dipole_count)*wavelength)
-        self.dipole_info['phi'].extend(np.random.random(dipole_count)*2*np.pi)
-        self.dipole_info['theta'].extend(
+        self.dipole_info['phi_d'].extend(np.random.random(dipole_count)*2*np.pi)
+        self.dipole_info['alpha_d'].extend(
             self._mc_sampler(lambda t: np.cos(t), [0, np.pi/2], dipole_count))
         # dipole_info['theta'] = np.random.random(dipole_count)*np.pi/2
 
         # plot on sphere 
-        x = np.cos(self.dipole_info['theta'])*np.sin(self.dipole_info['phi'])
-        y = np.cos(self.dipole_info['theta'])*np.cos(self.dipole_info['phi'])
-        z = np.sin(self.dipole_info['theta'])
+        x = np.cos(self.dipole_info['alpha_d'])*np.sin(self.dipole_info['phi_d'])
+        y = np.cos(self.dipole_info['alpha_d'])*np.cos(self.dipole_info['phi_d'])
+        z = np.sin(self.dipole_info['alpha_d'])
 
         # f = plt.figure()
         # ax = f.add_subplot(111, projection='3d')
@@ -78,12 +79,13 @@ class DipoleSource:
         printif("Generating %d dipoles" % dipole_count, show_prints)   
         for n in range(dipole_count):
             
-            p = self.dipole_info['phi'][n]
-            t = self.dipole_info['theta'][n]
+            p = self.dipole_info['phi_d'][n]
+            a = self.dipole_info['alpha_d'][n]
             # print("Phi:", self.dipole_info['phi'][n])
-            printif("Dipole: theta=%.1f, phi=%.1f" % (t*180/np.pi, p*180/np.pi), show_prints)
+            printif("Dipole: theta=%.1f, phi_d=%.1f" % (t*180/np.pi, p*180/np.pi),\
+                show_prints)
 
-            random_dipole = dipole.Dipole(p, t, lda_exc=wavelength)
+            random_dipole = dipole.Dipole(p, a, lda_exc=wavelength)
             self.dipole_ensemble.append(random_dipole)
 
     def generate_photoselection(self, dipole_count, wavelength=500e-9, show_prints=False):
