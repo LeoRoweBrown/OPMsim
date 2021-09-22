@@ -61,25 +61,41 @@ class Dipole:
         """
         # E = (e^ikr/r)k^2(n x p) x n
         # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
-        n_vec = [z*np.tan(theta)*np.cos(phi)-dx, z*np.tan(theta)*np.sin(phi)-dy, z-dz]
+        # n_vec = [z*np.tan(theta)*np.cos(phi)-dx, z*np.tan(theta)*np.sin(phi)-dy, z-dz]
+        n_vec = [z*np.tan(theta)*np.cos(phi), z*np.tan(theta)*np.sin(phi), z]
         n_x_p = np.cross(n_vec,self.p_vec)
-        k = 2*np.pi/self.lda_exc 
+        k = 2*np.pi/self.lda_exc
 
         r = (n_vec[0]**2 + n_vec[1]**2 + n_vec[2]**2)**0.5
         n_vec /= r  # normalise
  
         E_vec = np.cross(n_x_p, n_vec)
+        E_mag_real = 1/r  # just do 1/r for testing
         E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)?
+        E_vec = E_vec.astype(complex)   # hope this doesnt slow things too much
+
         return (E_vec, E_mag, n_vec)
 
-
-    def getEfield(self, theta, phi, r, curved_coords=True) -> np.ndarray:
+    def getEfield(self, theta, phi, r, curved_coords=True,
+        rotate_meridonal=True) -> np.ndarray:
         """propagate the E-field along r for an angle (theta, phi) in
            the pupil coordinates (?).
            Curved coords evaluates field perpendicular to ray and tangential to
            curved surface of pupil - NOTE: x and y basis is also rotated, so
-           when evalulating polarisation convert back with 
-           get_polarisation_xy_basis
+           when evalulating call with rotate_meridonal=True if you want xy polarisation
+           to be in the x-y basis of the system
+        Arguments:
+            phi <float> -- azimuthal angle, rotation about z axis [rad]
+                           clockwise when looking along positive z (into paper)
+            theta <float> -- polar angle measured from z axis [rad].
+            z <float> (1.0) -- distance from source to pupil in z (along optical axis) [m]
+            dx <float> (0.0) -- displacement of source from optical axis in x [m]
+            dy <float> (0.0) -- displacement of source from optical axis in y [m]
+            dz <float> (0.0) -- displacement of source from optical axis in z [m]
+        Returns:
+            (E_vec, E_mag, n_vec) -- Electric field vector, Electric field prefactor
+                                     (depends on propagation distance and wavelength)
+                                     and propagation direction
         """
         # E = (e^ikr/r)k^2(n x p) x n
         # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
@@ -91,6 +107,8 @@ class Dipole:
         E_vec = np.cross(n_x_p, n_vec)
         E_mag = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
 
+        E_vec = E_vec.astype(complex)   # hope this doesnt slow things too much
+
         if curved_coords:
             # phi = 0 we preserve x and y
             E_vec = self._rotate_efield(E_vec, theta, phi)
@@ -101,12 +119,20 @@ class Dipole:
 
             # now convert x and y rotated basis back to lab basis for meaningful
             # polarisation
-            E_vec_x = E_vec[0]*np.cos(phi) + E_vec[1]*np.sin(phi)
-            E_vec_y = -E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+            # E_vec_x = E_vec[0]*np.cos(phi) - E_vec[1]*np.sin(phi)
+            # E_vec_y = -E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+
+            # xy field (polarisation) transformation to recover original x-y basis
+            # (don't use this if tracing rays in syste, we want basis to be meridonal)
+            if rotate_meridonal:
+                E_vec_x = E_vec[0]*np.cos(phi) - E_vec[1]*np.sin(phi)
+                E_vec_y = E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+
             E_vec[0] = E_vec_x
             E_vec[1] = E_vec_y
 
         return (E_vec, E_mag, n_vec)
+
     
     def _rotate_efield(self, E_vec, theta_polar, phi):
         """ changes coordinate system according to k vector so that Ez = 0 """
@@ -132,7 +158,7 @@ class Dipole:
             # and lose rays along the way (not very efficient but hey)
 
             # z = working distance if first element in ray tracing is objective
-            E_vec, E_mag, k_vec = self.getEfield(theta, phi, z)
+            E_vec, E_mag, k_vec = self.getEfield(theta, phi, z, rotate_meridonal=False)
 
             ## now get polarisation: E vector relative to k, only azimuthal
             # convert E and k to useful things for the ray
@@ -152,7 +178,7 @@ class Dipole:
     def generate_pupil_rays(self):
         pass
 
-    def generate_pupil_field(self, NA, r=1, return_coords=False,\
+    def generate_pupil_field(self, NA, r=1, flat_pupil=False, return_coords=False,\
         phi_points=100, sin_theta_points=50):
         """
         For the polar color heatmaps we need the separate angle ranges i.e. something like
@@ -177,7 +203,13 @@ class Dipole:
         i = 0
         for t_i, theta in enumerate(pupil_theta_range):
             for p_i, phi in enumerate(pupil_phi_range):
-                e_vec, e_mag, k_vec = self.getEfield(theta, phi, r)
+                e_vec = np.array([])
+                e_mag = np.array([])
+                k_vec = np.array([])
+                if flat_pupil:
+                    e_vec, e_mag, k_vec = self.getEfield_z(theta, phi, r)
+                else:
+                    e_vec, e_mag, k_vec = self.getEfield(theta, phi, r)
                 # print(e_vec)
                 # print('######')
                 pupil_vals_x[t_i, p_i] = e_vec[0]
