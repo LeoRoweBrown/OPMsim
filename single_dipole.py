@@ -46,13 +46,13 @@ def simulate_single_dipole(dipole_phi, dipole_alpha, NA, flat_pupil=False,
                e_mag = 1
                k_vec = np.array([])
                if flat_pupil:
-                    e_vec, e_mag, k_vec = single_dipole.getEfield_z(theta, phi, 1)  
+                    e_vec, e_mag, k_vec = single_dipole.getEfield_z(phi, theta, 1)  
                     # flat pupil dont transform coords!
                     # include the prefactor because r is different
                     # e_vec *= e_mag
                     e_vec *= ((np.real(e_mag)**2 + np.imag(e_mag)**2)**0.5)
                else:
-                    e_vec, e_mag, k_vec = single_dipole.getEfield(theta, phi, 1, 
+                    e_vec, e_mag, k_vec = single_dipole.getEfield(phi, theta, 1, 
                          curved_coords=curved_coords)
                # print(e_vec)
                # print('######')

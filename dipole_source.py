@@ -12,8 +12,8 @@ class DipoleSource:
         self.dipole_ensemble = []
         self.dipole_info = {}
         self.dipole_info['lda_exc'] = []
-        self.dipole_info['phi'] = []
-        self.dipole_info['theta'] = []
+        self.dipole_info['phi_d'] = []
+        self.dipole_info['alpha_d'] = []
 
         # self.generate_dipoles(dipole_count)
 
@@ -35,18 +35,46 @@ class DipoleSource:
             a_dipole = dipole.Dipole(phi_d, alpha_d, lda_exc=wavelength)
             self.dipole_ensemble.append(a_dipole)
 
-    def generate_dipoles(self, dipole_count, wavelength=500e-9, show_prints=False):
+    def generate_dipoles(self, dipole_count, wavelength=500e-9, randomly=True, show_prints=False):
         """ 
         Generate (default: randomly) distriubted dipoles with same wavelength
         doesn't support beta, slow tumbling etc.
+        When not random, dipole_count is a target
         """
-
+        
         # range is phi_d 2pi and alpha_d pi
-        self.dipole_info['lda_exc'].extend(np.ones(dipole_count)*wavelength)
-        self.dipole_info['phi_d'].extend(np.random.random(dipole_count)*2*np.pi)
-        self.dipole_info['alpha_d'].extend(
-            self._mc_sampler(lambda t: np.cos(t), [0, np.pi/2], dipole_count))
-        # dipole_info['theta'] = np.random.random(dipole_count)*np.pi/2
+        if randomly:
+            self.dipole_info['lda_exc'].extend(np.ones(dipole_count)*wavelength)
+            self.dipole_info['phi_d'].extend(np.random.random(dipole_count)*2*np.pi)
+            self.dipole_info['alpha_d'].extend(
+                self._mc_sampler(lambda t: np.cos(t), [0, np.pi/2], dipole_count))
+                
+            # dipole_info['theta'] = np.random.random(dipole_count)*np.pi/2
+        else:
+            ## uniformish
+            N_on_arc = int(np.ceil(dipole_count**0.5/2))
+            alphas = np.linspace(0, np.pi/2, N_on_arc)
+             # mean number of points on equator of given theta
+            N_segments_mean = int(np.ceil(2*dipole_count**0.5)) 
+            # distribution is pi/2*N_segments_mean*cos(theta)
+            N_segments = np.zeros(N_on_arc, dtype=int)
+            
+            # scale N_segments properly so they follow cos distribution
+            for n_arc in range(N_on_arc):
+                N_segments[n_arc] = np.int(
+                    np.ceil(np.pi/2 * N_segments_mean * np.cos(alphas[n_arc])))
+                #print(N_on_arc)
+                #print(N_segments[n_arc])
+                self.dipole_info['alpha_d'].extend(np.tile(
+                    alphas[n_arc], N_segments[n_arc]))
+                
+                self.dipole_info['phi_d'].extend(
+                    np.linspace(0, 2*np.pi, N_segments[n_arc]))
+
+            dipole_count = np.sum(N_segments)
+            self.dipole_info['lda_exc'].extend(np.ones(dipole_count)*wavelength)
+
+            print("New dipole count:", dipole_count)
 
         # plot on sphere 
         x = np.cos(self.dipole_info['alpha_d'])*np.sin(self.dipole_info['phi_d'])
@@ -59,6 +87,7 @@ class DipoleSource:
         # ax.set_box_aspect((1,1,1))
         # plt.show()
 
+        ## plot to verify distribution
         f2d = plt.figure(figsize=(14, 7))
         ax_xz = f2d.add_subplot(211)
         ax_xz.scatter(z,x)
@@ -82,7 +111,7 @@ class DipoleSource:
             p = self.dipole_info['phi_d'][n]
             a = self.dipole_info['alpha_d'][n]
             # print("Phi:", self.dipole_info['phi'][n])
-            printif("Dipole: theta=%.1f, phi_d=%.1f" % (t*180/np.pi, p*180/np.pi),\
+            printif("Dipole: theta=%.1f, phi_d=%.1f" % (a*180/np.pi, p*180/np.pi),\
                 show_prints)
 
             random_dipole = dipole.Dipole(p, a, lda_exc=wavelength)
@@ -90,7 +119,7 @@ class DipoleSource:
 
     def generate_photoselection(self, dipole_count, wavelength=500e-9, show_prints=False):
         """ currently only acceping one excitation polarisation """
-        # probability of excitaiton proportional to intensity 
+        # probability of excitaiton proportional to intensity, will be another MC rejection?
         raise NotImplementedError("Photoselection of dipole distribution not implemented")
 
     def calculate_pupil_radiation(self, NA, r=1):

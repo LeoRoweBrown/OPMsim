@@ -40,7 +40,7 @@ class Dipole:
             np.cos(alpha_d)*np.sin(phi_d), \
             np.sin(alpha_d)]
     
-    def getEfield_z(self, theta, phi, z=1, dx=0, dy=0, dz=0):
+    def getEfield_z(self, phi, theta, z=1, dx=0, dy=0, dz=0):
         """ PROBABLY WONT BE USED 
         propagate the E-field to z position at angle (theta, phi) in
         pupil coordinates, (not same theta as dipole) with dipole
@@ -59,9 +59,6 @@ class Dipole:
                                      (depends on propagation distance and wavelength)
                                      and propagation direction
         """
-        # E = (e^ikr/r)k^2(n x p) x n
-        # n = [sin(theta_p)cos(phi) i, sin(theta_p)sin(phi_p) j, cos(theta_p) k]
-        # n_vec = [z*np.tan(theta)*np.cos(phi)-dx, z*np.tan(theta)*np.sin(phi)-dy, z-dz]
         n_vec = [z*np.tan(theta)*np.cos(phi), z*np.tan(theta)*np.sin(phi), z]
         n_x_p = np.cross(n_vec,self.p_vec)
         k = 2*np.pi/self.lda_exc
@@ -76,7 +73,7 @@ class Dipole:
 
         return (E_vec, E_mag, n_vec)
 
-    def getEfield(self, theta, phi, r, curved_coords=True,
+    def getEfield(self, phi, theta, r, curved_coords=True,
         rotate_meridonal=True) -> np.ndarray:
         """propagate the E-field along r for an angle (theta, phi) in
            the pupil coordinates (?).
@@ -111,7 +108,7 @@ class Dipole:
 
         if curved_coords:
             # phi = 0 we preserve x and y
-            E_vec = self._rotate_efield(E_vec, theta, phi)
+            E_vec = self._rotate_efield(E_vec, phi,  theta)
             # should E_z really be zero? Non TEM modes in air? No
             if E_vec[2]**2 > 1e-3*(E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2):
                 print("Ez =", E_vec[2], "Ex =", E_vec[0], "E_y =", E_vec[1])
@@ -119,11 +116,9 @@ class Dipole:
 
             # now convert x and y rotated basis back to lab basis for meaningful
             # polarisation
-            # E_vec_x = E_vec[0]*np.cos(phi) - E_vec[1]*np.sin(phi)
-            # E_vec_y = -E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
 
             # xy field (polarisation) transformation to recover original x-y basis
-            # (don't use this if tracing rays in syste, we want basis to be meridonal)
+            # (don't use this if tracing rays in system! Want basis to stay meridonal)
             if rotate_meridonal:
                 E_vec_x = E_vec[0]*np.cos(phi) - E_vec[1]*np.sin(phi)
                 E_vec_y = E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
@@ -134,7 +129,7 @@ class Dipole:
         return (E_vec, E_mag, n_vec)
 
     
-    def _rotate_efield(self, E_vec, theta_polar, phi):
+    def _rotate_efield(self, E_vec, phi, theta_polar):
         """ changes coordinate system according to k vector so that Ez = 0 """
         E_x_tf = E_vec[0]*np.cos(phi)*np.cos(theta_polar) + \
             E_vec[1]*np.sin(phi)*np.cos(theta_polar)\
@@ -147,7 +142,8 @@ class Dipole:
 
         return E_rot
 
-    def new_ray(self, theta, phi, z):
+
+    def new_ray(self, theta, phi, r):
         """calculate new E-field based on position in pupil at z defined by (theta, phi) and dipole position (dx dy dz)"""
         if not self.ray.exists():
             # use getEfield to calculate the E field based on a propagation vector
@@ -158,14 +154,14 @@ class Dipole:
             # and lose rays along the way (not very efficient but hey)
 
             # z = working distance if first element in ray tracing is objective
-            E_vec, E_mag, k_vec = self.getEfield(theta, phi, z, rotate_meridonal=False)
+            E_vec, E_mag, k_vec = self.getEfield(phi, theta, r, rotate_meridonal=False)
 
             ## now get polarisation: E vector relative to k, only azimuthal
             # convert E and k to useful things for the ray
             # i.e. do Rz and Ry coord transforms, if they're correct, Ez should be
             # zero in the new coords, make a func for this?
 
-            E_vec = self._rotate_efield(E_vec, theta, phi)
+            E_vec = self._rotate_efield(E_vec, phi, theta)
             if E_vec[2]**2 > 1e-4*(E_vec[0]**2 + E_vec[1]**2):
                 print("Ez = ", E_vec[2])
                 raise Exception("E_z is not zero in ray's frame!")
@@ -207,9 +203,9 @@ class Dipole:
                 e_mag = np.array([])
                 k_vec = np.array([])
                 if flat_pupil:
-                    e_vec, e_mag, k_vec = self.getEfield_z(theta, phi, r)
+                    e_vec, e_mag, k_vec = self.getEfield_z(phi, theta, r)
                 else:
-                    e_vec, e_mag, k_vec = self.getEfield(theta, phi, r)
+                    e_vec, e_mag, k_vec = self.getEfield(phi, theta, r)
                 # print(e_vec)
                 # print('######')
                 pupil_vals_x[t_i, p_i] = e_vec[0]
