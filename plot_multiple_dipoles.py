@@ -6,9 +6,9 @@ import os
 
 
 def plot_random_dipole_source(NA, dipole_count, save_dir=None,
-    file_name='multi_dipole_pupil.png', show_prints=False):
+    file_name='multi_dipole_pupil.png', randomly=False, show_prints=False):
     dipoles = dipole_source.DipoleSource()
-    dipoles.generate_dipoles(dipole_count)
+    dipoles.generate_dipoles(dipole_count, randomly=randomly)
     angles, data_intensity_x, data_intensity_y = dipoles.calculate_pupil_radiation(NA)
 
     title = "Radiation distribution in pupil for %d randomly distributed dipoles"\
