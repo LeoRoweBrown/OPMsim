@@ -143,7 +143,7 @@ class Dipole:
         return E_rot
 
 
-    def new_ray(self, theta, phi, r):
+    def new_ray(self, theta, phi, r, include_prefactor=False):
         """calculate new E-field based on position in pupil at z defined by (theta, phi) and dipole position (dx dy dz)"""
         if not self.ray.exists():
             # use getEfield to calculate the E field based on a propagation vector
@@ -154,7 +154,7 @@ class Dipole:
             # and lose rays along the way (not very efficient but hey)
 
             # z = working distance if first element in ray tracing is objective
-            E_vec, E_mag, k_vec = self.getEfield(phi, theta, r, rotate_meridonal=False)
+            E_vec, E_pre, k_vec = self.getEfield(phi, theta, r, rotate_meridonal=False)
 
             ## now get polarisation: E vector relative to k, only azimuthal
             # convert E and k to useful things for the ray
@@ -168,11 +168,24 @@ class Dipole:
             magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
             polarisation = \
                 E_vec/magnitude
+            position = [theta, phi]
 
-            ray = Ray(self.lda_exc, polarisation, k_vec, magnitude, E_mag)
+            ray = Ray(self.lda_exc, polarisation, k_vec, magnitude, E_pre)
+            return ray
 
-    def generate_pupil_rays(self):
-        pass
+    def generate_pupil_rays(self, NA, WD, phi_points=100, theta_points=50):
+        # raise NotImplementedError()
+        max_sin_theta = NA  # assume n = 1
+        # sample linear in sine space? fewer edge points, let's not do this actually
+        # pupil_sin_theta_range = np.linspace(0,max_sin_theta,sin_theta_points)
+        # pupil_theta_range = np.arcsin(pupil_sin_theta_range)
+        pupil_theta_range = np.linspace(0,np.arcsin(NA),theta_points)
+        pupil_phi_range = np.linspace(0,2*np.pi,phi_points)
+        ray_list = 
+        
+        for t_i, theta in enumerate(pupil_theta_range):
+            for p_i, phi in enumerate(pupil_phi_range):
+                self.new_ray(theta, phi, WD, include_prefactor=False)
 
     def generate_pupil_field(self, NA, r=1, flat_pupil=False, return_coords=False,\
         phi_points=100, sin_theta_points=50):
