@@ -11,6 +11,7 @@ class Ray:
         direction <ndarray> -- ray direction [x y z] in terms of polar coords phi
                            (yz plane), theta (from z e.g. in xz plane if y=0)
         polarisation <ndarray> -- E field vector [x y z] relative to direction
+        prefactor <float> -- includes 1/r dependence from source and phase 
 
         Methods:
         """
