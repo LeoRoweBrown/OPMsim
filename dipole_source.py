@@ -17,8 +17,8 @@ class DipoleSource:
 
         # self.generate_dipoles(dipole_count)
 
-    def add_dipoles(self, alpha_d, phi_d, dipole_count=1, wavelength=500e-9,
-        dx=0, dy=0, dz=0):
+    def add_dipoles(self, alpha_d, phi_d, 
+        dipole_count=1, wavelength=500e-9, show_prints=True):
         """ 
         Add identical dipoles to the source, doesn't support beta, slow tumbling etc.
         Angles in degrees, phi_d and theta_d are the dipole angles
@@ -29,10 +29,18 @@ class DipoleSource:
         self.dipole_info['lda_exc'].extend(np.ones(dipole_count)*wavelength)
         self.dipole_info['phi_d'].extend(np.ones(dipole_count)*phi_d)
         self.dipole_info['alpha_d'].extend(np.ones(dipole_count)*alpha_d)
-        self.dipole_info['displacement'].extend((dx, dy, dz))
         
+
+        printif("Generating %d dipoles" % dipole_count, show_prints)   
         for n in range(dipole_count):
-            a_dipole = dipole.Dipole(phi_d, alpha_d, lda_exc=wavelength)
+            
+            p = self.dipole_info['phi_d'][n]
+            a = self.dipole_info['alpha_d'][n]
+            # print("Phi:", self.dipole_info['phi'][n])
+            printif("Dipole: theta=%.1f, phi_d=%.1f" % (a*180/np.pi, p*180/np.pi),\
+                show_prints)
+
+            a_dipole = dipole.Dipole(p, a, lda_exc=wavelength)
             self.dipole_ensemble.append(a_dipole)
 
     def generate_dipoles(self, dipole_count, wavelength=500e-9, randomly=True, show_prints=False):
@@ -122,15 +130,17 @@ class DipoleSource:
         # probability of excitaiton proportional to intensity, will be another MC rejection?
         raise NotImplementedError("Photoselection of dipole distribution not implemented")
 
-    def calculate_pupil_radiation(self, NA, r=1):
+    def calculate_pupil_radiation(self, NA, r=1, pupil='curved'):
         """ incoherent addition (intensity) across curved pupil for all dipoles """
+        if pupil=='flat' and NA==1:
+            raise Warning("Unphysical situation! NA=1 with flat pupil")
         total_intensity_x = []
         total_intensity_y = []
         angles = tuple()  # same for all dipoles
         for n in range(len(self.dipole_ensemble)):
             current_dipole = self.dipole_ensemble[n]
             angles, vals_efield_x, vals_efield_y = \
-                current_dipole.generate_pupil_field(NA, r)
+                current_dipole.generate_pupil_field(NA, r, pupil=pupil)
             intensity_x = (vals_efield_x*np.conjugate(vals_efield_x)).real
             intensity_y = (vals_efield_y*np.conjugate(vals_efield_y)).real
             if n == 0:

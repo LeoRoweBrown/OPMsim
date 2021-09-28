@@ -28,7 +28,8 @@ share/python-wheels/
 MANIFEST
 
 # images
-single_dipole_sims2/
+*.png
+*.jpg
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
