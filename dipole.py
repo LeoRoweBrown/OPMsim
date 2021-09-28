@@ -128,6 +128,39 @@ class Dipole:
 
         return (E_vec, E_mag, n_vec)
 
+    def getEfield_bfp(self, phi, theta, WD, rotate_meridonal=True) -> np.ndarray:
+        # L(-theta)R(phi)E_vec
+        n_vec = [ np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), \
+            np.cos(theta)]
+        n_x_p = np.cross(n_vec,self.p_vec)
+        k = 2*np.pi/self.lda_exc 
+ 
+        E_vec = np.cross(n_x_p, n_vec)
+        E_mag = (np.e**(1j*k*WD)/WD)*k**2  # replace with distribution of k (lambda_exc)
+
+        E_vec = E_vec.astype(complex)   # hope this doesnt slow things too much
+
+        # coord transform
+        E_vec = self._rotate_efield(E_vec, phi, 0)  # only do R(phi)
+
+        # lens refraction in meridonal plane
+        E_vec_x = E_vec[0]*np.cos(-theta) + E_vec[2]*np.sin(-theta)
+        E_vec_y = E_vec[1]
+        E_vec_z = -E_vec[0]*np.sin(-theta) + E_vec[2]*np.cos(-theta)
+
+        E_vec[0] = E_vec_x
+        E_vec[1] = E_vec_y
+        E_vec[2] = E_vec_z
+
+        if rotate_meridonal:  # leave meridonal basis, go back to lab coords
+            E_vec_x = E_vec[0]*np.cos(phi) - E_vec[1]*np.sin(phi)
+            E_vec_y = E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
+
+        E_vec[0] = E_vec_x
+        E_vec[1] = E_vec_y
+
+        return (E_vec, E_mag, n_vec)
+
     
     def _rotate_efield(self, E_vec, phi, theta_polar):
         """ changes coordinate system according to k vector so that Ez = 0 """
@@ -144,7 +177,11 @@ class Dipole:
 
 
     def new_ray(self, theta, phi, r, include_prefactor=False):
-        """calculate new E-field based on position in pupil at z defined by (theta, phi) and dipole position (dx dy dz)"""
+        """
+        calculate new E-field based on position in pupil defined by (theta, phi) 
+        and radius of curved pupil (which gives the ray height)
+        We get meridonal rays with a fixed phi and 
+        """
         if not self.ray.exists():
             # use getEfield to calculate the E field based on a propagation vector
             # and the dipole distribution, i.e. this is used for the calculation
@@ -168,9 +205,9 @@ class Dipole:
             magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
             polarisation = \
                 E_vec/magnitude
-            position = [theta, phi]
+            height = r*np.sin(theta)  # used in ray tracing 
 
-            ray = Ray(self.lda_exc, polarisation, k_vec, magnitude, E_pre)
+            ray = Ray(self.lda_exc, polarisation, height, k_vec, magnitude, E_pre)
             return ray
 
     def generate_pupil_rays(self, NA, WD, phi_points=100, theta_points=50):
@@ -181,13 +218,15 @@ class Dipole:
         # pupil_theta_range = np.arcsin(pupil_sin_theta_range)
         pupil_theta_range = np.linspace(0,np.arcsin(NA),theta_points)
         pupil_phi_range = np.linspace(0,2*np.pi,phi_points)
-        ray_list = 
-        
+        ray_list = [None]*phi_points*theta_points
+
+        n = 0
         for t_i, theta in enumerate(pupil_theta_range):
             for p_i, phi in enumerate(pupil_phi_range):
-                self.new_ray(theta, phi, WD, include_prefactor=False)
-
-    def generate_pupil_field(self, NA, r=1, flat_pupil=False, return_coords=False,\
+                ray_list[n] = self.new_ray(theta, phi, WD, include_prefactor=False)
+                n += 1
+        
+    def generate_pupil_field(self, NA, r=1, pupil='curved', return_coords=False,\
         phi_points=100, sin_theta_points=50):
         """
         For the polar color heatmaps we need the separate angle ranges i.e. something like
@@ -215,10 +254,12 @@ class Dipole:
                 e_vec = np.array([])
                 e_mag = np.array([])
                 k_vec = np.array([])
-                if flat_pupil:
+                if pupil == 'flat':
                     e_vec, e_mag, k_vec = self.getEfield_z(phi, theta, r)
-                else:
+                elif pupil == 'curved':
                     e_vec, e_mag, k_vec = self.getEfield(phi, theta, r)
+                elif pupil == 'bfp':  # back focal plane
+                    e_vec, e_mag, k_vec = self.getEfield_bfp(phi, theta, WD=r)
                 # print(e_vec)
                 # print('######')
                 pupil_vals_x[t_i, p_i] = e_vec[0]
