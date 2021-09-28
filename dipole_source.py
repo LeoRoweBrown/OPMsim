@@ -123,7 +123,7 @@ class DipoleSource:
         raise NotImplementedError("Photoselection of dipole distribution not implemented")
 
     def calculate_pupil_radiation(self, NA, r=1):
-        """ incoherent addition (intensity) across curved pupil """
+        """ incoherent addition (intensity) across curved pupil for all dipoles """
         total_intensity_x = []
         total_intensity_y = []
         angles = tuple()  # same for all dipoles
