@@ -6,12 +6,13 @@ import os
 
 def plot_single_dipole_source(dipole_alpha, dipole_phi, NA,
     dipole_obj=None, save_dir=None,
-    show_prints=False, pupil='curved'):
+    show_prints=False, pupil='curved', rescale_energy=False):
 
     dipoles = dipole_source.DipoleSource()
     dipoles.add_dipoles(dipole_alpha, dipole_phi, 1)
     angles, data_intensity_x, data_intensity_y = \
-        dipoles.calculate_pupil_radiation(NA, pupil=pupil)
+        dipoles.calculate_pupil_radiation(NA, pupil=pupil,
+            rescale_energy=rescale_energy)
 
     dipole_phi_deg = dipole_phi*180/np.pi
     dipole_alpha_deg = dipole_alpha*180/np.pi
@@ -29,10 +30,13 @@ def plot_single_dipole_source(dipole_alpha, dipole_phi, NA,
         file_name, plot_arrow=dipole_angles)
 
 def plot_random_dipole_source(NA, dipole_count, save_dir=None,
-    file_name='multi_dipole_pupil.png', randomly=False, show_prints=False):
+    file_name='multi_dipole_pupil.png', randomly=False, show_prints=False,
+    pupil='curved', rescale_energy=False):
+
     dipoles = dipole_source.DipoleSource()
     dipoles.generate_dipoles(dipole_count, randomly=randomly)
-    angles, data_intensity_x, data_intensity_y = dipoles.calculate_pupil_radiation(NA)
+    angles, data_intensity_x, data_intensity_y = dipoles.calculate_pupil_radiation(NA,
+        pupil=pupil, rescale_energy=rescale_energy)
 
     title = "Radiation distribution in pupil for %d randomly distributed dipoles"\
         % (dipole_count)

@@ -130,7 +130,7 @@ class DipoleSource:
         # probability of excitaiton proportional to intensity, will be another MC rejection?
         raise NotImplementedError("Photoselection of dipole distribution not implemented")
 
-    def calculate_pupil_radiation(self, NA, r=1, pupil='curved'):
+    def calculate_pupil_radiation(self, NA, r=1, pupil='curved', rescale_energy=False):
         """ incoherent addition (intensity) across curved pupil for all dipoles """
         if pupil=='flat' and NA==1:
             raise Warning("Unphysical situation! NA=1 with flat pupil")
@@ -140,7 +140,8 @@ class DipoleSource:
         for n in range(len(self.dipole_ensemble)):
             current_dipole = self.dipole_ensemble[n]
             angles, vals_efield_x, vals_efield_y = \
-                current_dipole.generate_pupil_field(NA, r, pupil=pupil)
+                current_dipole.generate_pupil_field(NA, r, pupil=pupil,
+                    rescale_energy = rescale_energy)
             intensity_x = (vals_efield_x*np.conjugate(vals_efield_x)).real
             intensity_y = (vals_efield_y*np.conjugate(vals_efield_y)).real
             if n == 0:

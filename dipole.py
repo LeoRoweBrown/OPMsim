@@ -128,7 +128,8 @@ class Dipole:
 
         return (E_vec, E_mag, n_vec)
 
-    def getEfield_bfp(self, phi, theta, WD, rotate_meridonal=True) -> np.ndarray:
+    def getEfield_bfp(self, phi, theta, WD, rotate_meridonal=True,
+        rescale_energy=True, dtheta=0) -> np.ndarray:
         # L(-theta)R(phi)E_vec
         n_vec = [ np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), \
             np.cos(theta)]
@@ -158,6 +159,15 @@ class Dipole:
 
         E_vec[0] = E_vec_x
         E_vec[1] = E_vec_y
+
+        if rescale_energy:
+            if np.cos(theta)<1e-4:
+                E_vec[0] = 0
+                E_vec[1] = 0
+                E_vec[2] = 0
+                Warning("At edge of pupil, setting |E|=0")
+            E_vec = E_vec/(np.cos(theta))**0.5
+            
 
         return (E_vec, E_mag, n_vec)
 
@@ -227,7 +237,7 @@ class Dipole:
                 n += 1
         
     def generate_pupil_field(self, NA, r=1, pupil='curved', return_coords=False,\
-        phi_points=100, sin_theta_points=50):
+        rescale_energy=False, phi_points=100, sin_theta_points=50):
         """
         For the polar color heatmaps we need the separate angle ranges i.e. something like
         [0, pi] and [0, pi, 2pi]  (length n and m each), while coords are like
@@ -255,11 +265,13 @@ class Dipole:
                 e_mag = np.array([])
                 k_vec = np.array([])
                 if pupil == 'flat':
-                    e_vec, e_mag, k_vec = self.getEfield_z(phi, theta, r)
+                    e_vec, e_mag, k_vec = self.getEfield_z(phi, theta, r,
+                        rescale_energy=rescale_energy)
                 elif pupil == 'curved':
                     e_vec, e_mag, k_vec = self.getEfield(phi, theta, r)
                 elif pupil == 'bfp':  # back focal plane
-                    e_vec, e_mag, k_vec = self.getEfield_bfp(phi, theta, WD=r)
+                    e_vec, e_mag, k_vec = self.getEfield_bfp(phi, theta, WD=r,
+                        rescale_energy=rescale_energy)
                 # print(e_vec)
                 # print('######')
                 pupil_vals_x[t_i, p_i] = e_vec[0]
