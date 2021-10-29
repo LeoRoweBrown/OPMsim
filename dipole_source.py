@@ -1,3 +1,4 @@
+from ray import MerdinonalRay
 from matplotlib import pyplot as plt
 import numpy as np
 import dipole
@@ -84,16 +85,10 @@ class DipoleSource:
 
             print("New dipole count:", dipole_count)
 
-        # plot on sphere 
+        # plot on sphere - maybe move this plotting somewhere more elegant
         x = np.cos(self.dipole_info['alpha_d'])*np.sin(self.dipole_info['phi_d'])
         y = np.cos(self.dipole_info['alpha_d'])*np.cos(self.dipole_info['phi_d'])
         z = np.sin(self.dipole_info['alpha_d'])
-
-        # f = plt.figure()
-        # ax = f.add_subplot(111, projection='3d')
-        # ax.scatter(x,y,z)
-        # ax.set_box_aspect((1,1,1))
-        # plt.show()
 
         ## plot to verify distribution
         f2d = plt.figure(figsize=(14, 7))
@@ -151,6 +146,73 @@ class DipoleSource:
                 total_intensity_x += intensity_x
                 total_intensity_y += intensity_y
         return angles, total_intensity_x, total_intensity_y
+
+    def calculate_pupil_field(self, NA, r=1, pupil='curved', rescale_energy=False,
+        return_coords=True):
+        """ Cannot think of a good use for this, we don't work with coherent
+        radiation so seems pointless to have a field version of this
+        needs to work with complex numbers and time/space dependent phase term
+        (otherwise summing E-field does not make physical sense)
+        TL;DR, remove this"""
+        if pupil=='flat' and NA==1:
+            raise Warning("Unphysical situation! NA=1 with flat pupil")
+        total_efield_x = []
+        total_efield_y = []
+        angles = tuple()  # same for all dipoles
+        for n in range(len(self.dipole_ensemble)):
+            current_dipole = self.dipole_ensemble[n]
+            angles, vals_efield_x, vals_efield_y = \
+                current_dipole.generate_pupil_field(NA, r, pupil=pupil,
+                    rescale_energy = rescale_energy, return_coords=True)
+            if n == 0:
+                total_efield_x = vals_efield_x
+                total_efield_y = vals_efield_y
+            else:  # sum up complex values
+                total_efield_x += vals_efield_x
+                total_efield_y += vals_efield_y
+        return angles, total_efield_x, total_efield_y
+
+    
+    def get_rays(self, NA, r=1):
+        """
+        Gets the ray intensity contributions in each polarisation direction at the
+        curved pupil (before first lens/objective lens) and sums.
+        Picks a point on the pupil (a certain ray) and sums the contribution from
+        each dipole, and repeats for all points. This gives a new ray for each point
+        and is added to self.source_ray_list (source analogue of ray_list).
+
+        NA: <float> numerical aperture - defines the range of ray angles in pupil
+        r: <float> radial distance to (spherical) pupil (focal length)
+
+        """
+        angles = tuple()  # same for all dipoles
+        summed_rays = []
+
+        ray_count = self.dipole_ensemble[0].ray_list.size
+        summed_rays = [None]*ray_count
+        sum_rays_xm = [None]*ray_count
+        sum_rays_ym = [None]*ray_count
+
+        for i in range(ray_count):  # loop over pupil positions
+            for n in range(len(self.dipole_ensemble)):  # loop over dipoles
+                current_dipole = self.dipole_ensemble[n]
+                current_dipole_rays = current_dipole.generate_pupil_rays()
+                ray_instance = current_dipole_rays.ray_list[i]
+                ray_xm = ray_instance.polarisation[0] * ray_instance.magnitude
+                ray_ym = ray_instance.polarisation[1] * ray_instance.magnitude
+                sum_rays_xm[i] += ray_xm
+                sum_rays_ym[i] += ray_ym
+            #make new ray for each pupil position, but summed
+
+            temp_ray_i = self.dipole_ensemble[0].ray_list[i]
+            phi = temp_ray_i.phi
+            theta = temp_ray_i.theta
+            lda = temp_ray_i.lda
+            magnitude = (sum_rays_xm**2 + sum_rays_ym**2)**0.5  # dont really need to have this as a list (unless debugging?)
+            polarisation = [sum_rays_xm/magnitude, sum_rays_ym/magnitude]
+            summed_rays[i] = MerdinonalRay(lda,polarisation, theta, phi, magnitude)
+        self.source_ray_list = summed_rays
+        return summed_rays  # unneeded?
 
     def _mc_sampler(self, pdf, input_range, N, maxiter=10000, plot=True):
         # takes normalised X~pdf(x) function and gets N points according to

@@ -21,8 +21,8 @@ def plot_single_dipole_source(dipole_alpha, dipole_phi, NA,
         (dipole_alpha_deg, dipole_phi_deg, pupil)
 
     title = ("Single dipole radiation in pupil for "\
-        + "$\\phi_d = %.1f^\circ, \\alpha_d = %.1f^\circ$ (%s pupil)" %\
-            (dipole_phi_deg, dipole_alpha_deg, pupil))
+        + "$\\phi_d = %.1f^\circ, \\alpha_d = %.1f^\circ$ (%s pupil), NA=%.2f" %\
+            (dipole_phi_deg, dipole_alpha_deg, pupil, NA))
 
     dipole_angles=[dipole_alpha, dipole_phi]
 
