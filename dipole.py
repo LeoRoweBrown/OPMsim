@@ -186,11 +186,16 @@ class Dipole:
         return E_rot
 
 
-    def new_ray(self, theta, phi, r, include_prefactor=False, return_intensity=True):
+    def new_ray(self, theta, phi, r, include_prefactor=False):
         """
         calculate new E-field based on position in pupil defined by (theta, phi) 
         and radius of curved pupil (which gives the ray height)
-        We get meridonal rays with a fixed phi and 
+        
+        Ray tracing we perform is fairly basic and doesn't include thinking about
+        ray heights, just the final angles of the e-field and k vector
+        This is how it is done in obSTORM paper, maybe we will revisit considering
+        full tracing method. Maybe we will include the path different (can just do
+        this with simple geometry purely with theta)
         """
         # use getEfield to calculate the E field based on a propagation vector
         # and the dipole distribution, i.e. this is used for the calculation
@@ -200,43 +205,42 @@ class Dipole:
         # and lose rays along the way (not very efficient but hey)
 
         # z = working distance if first element in ray tracing is objective
+        # xy_basis=False means we return in meridonal coords, we only want this
+        # when we start tracing, for now we keep in xy_basis
         E_vec, E_pre, k_vec = self.getEfield(phi, theta, r, xy_basis=False)
 
         ## now get polarisation: E vector relative to k, only azimuthal
         # convert E and k to useful things for the ray
         # i.e. do Rz and Ry coord transforms, if they're correct, Ez should be
         # zero in the new coords, make a func for this?
-
-        # WE WANT RAYS IN INTENSITY I THINK? 
-
         # get field in frame of ray direction, Ez = 0
-        E_vec = self._rotate_efield(E_vec, phi, theta)
-        if include_prefactor:
+        E_vec_check = self._rotate_efield(E_vec, phi, theta)
+        if E_vec_check[2]**2 > 1e-4*(E_vec_check[0]**2 + E_vec_check[1]**2):
+            print("Ez = ", E_vec_check[2])
+            raise Exception("E_z is not zero in ray's frame!")
+
+        # complex phase factor (often ignored), may use to parameterise finite
+        # spectral, lifetime and phase differences between dipoles
+        if include_prefactor:  
             E_vec *= E_pre
         
-        if E_vec[2]**2 > 1e-4*(E_vec[0]**2 + E_vec[1]**2):
-            print("Ez = ", E_vec[2])
-            raise Exception("E_z is not zero in ray's frame!")
-        I_vec = E_vec * np.conjugate(E_vec)
-        magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
-        
-        if return_intensity:
-            I_magnitude = (I_vec[0]**2 + I_vec[1]**2 + I_vec[2]**2)**0.5
-            polarisation = I_vec/I_magnitude
-        polarisation = \
-            E_vec/magnitude
-        height = r*np.sin(theta)  # used in ray tracing 
+        # I_vec = E_vec * np.conjugate(E_vec)
+        # magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
 
         # generate ray in a meridonal plane i.e. polarisation in basis aligned with phi
-        ray_ = ray.MeridonalRay(self.lda_exc, polarisation, height, theta, phi, magnitude, E_pre)
+        ray_ = ray.PolarRay(self.lda_exc, E_vec, k_vec, E_pre)
         return ray_
 
-    def generate_pupil_rays(self, NA, WD, phi_points=100, theta_points=50):
-        # raise NotImplementedError()
+    def generate_pupil_rays(self, NA, f, phi_points=100, theta_points=50):
+        """
+        Generate rays over varying theta, phi with max theta defined by NA
+        Calculate E-field and use theta, phi to define k-vector and generate
+        ray objects for each (theta, phi)/each point on entrance pupil(?)
+
+        Rays are traced later on in method derived from obSTORM paper, Kim et al.
+
+        """
         max_sin_theta = NA  # assume n = 1
-        # sample linear in sine space? fewer edge points, let's not do this actually
-        # pupil_sin_theta_range = np.linspace(0,max_sin_theta,sin_theta_points)
-        # pupil_theta_range = np.arcsin(pupil_sin_theta_range)
         pupil_theta_range = np.linspace(0,np.arcsin(NA),theta_points)
         pupil_phi_range = np.linspace(0,2*np.pi,phi_points)
         self.ray_list = [None]*phi_points*theta_points
@@ -244,7 +248,7 @@ class Dipole:
         n = 0
         for t_i, theta in enumerate(pupil_theta_range):
             for p_i, phi in enumerate(pupil_phi_range):
-                self.ray_list[n] = self.new_ray(theta, phi, WD, include_prefactor=False)
+                self.ray_list[n] = self.new_ray(theta, phi, f, include_prefactor=False)
                 n += 1
         
     def generate_pupil_field(self, NA, r=1, pupil='curved', return_coords=False,\

@@ -23,11 +23,21 @@ class PolarRay:
         self.ray_history = []
 
     def propagate(self, r):
+        # we don't propagate in the obSTORM method, to remove.
         pass
 
+    def cartesian_to_polar(self):
+        # takes k_vec and obtains phi and theta, phi used in transform
+        pass
+
+    def meridonial_transform(self):
+        # needs phi? obtain from k_vec?
+        # change coords to medionial/sagittal
+        pass
 
 class MerdinonalRay:
     """
+    Not really going to use this!!!
     Ray class for ray tracing once initial E and k vectors are passed,
     these are calculated by getEfield in the dipole class - the idea is to
     evaluate the field at the entrance pupil and trace from there
