@@ -31,6 +31,13 @@ class SineLens(Element):
         super(SineLens, self).__init__(
             focal_length, diameter, dz, dx=0, dy=0, theta=0, phi=0)
 
+    def apply_matrix(self, ray_list):
+        # generate matrix based on ray's theta, apply after coord transform
+        pass
+
+    def _trace_to_surface(self, ray):
+        """ Trace to curved sine-lens surface """
+
 class IdealFlatMirror(Element):
     """
     Ideal flat mirror with rotation about x axis
@@ -70,7 +77,7 @@ class ThinLens(Element):
          
 
 class TubeLens(ThinLens):
-    """ A bit redundant when ThinLens exists """
+    """ Redunant, we are using spherical surfaces for diffraction """
     def __init__(self, focal_length, diameter, dz=0):
         self.type = 'TubeLens'
         self.focal_length = focal_length
