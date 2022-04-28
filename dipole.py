@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import no_type_check
 
 import numpy as np
@@ -31,6 +32,7 @@ class Dipole:
         self.phi_d = phi_d
         self.lda_em = lda_em
         self.lda_exc = lda_exc
+        self.density = 1  # scales quantity/density/fractional quanitity?
         # expression of p has polar angle measured from z not x
         alpha_90deg = (alpha_d + np.pi/2) % (2*np.pi)
 
@@ -106,7 +108,9 @@ class Dipole:
 
         E_vec = E_vec.astype(complex)   # hope this doesnt slow things too much
 
-        if curved_coords:
+        # in ray tracing not needed because we do the refraction
+        # MAYBE remove all this at some point to avoid confusion
+        if curved_coords:  # rotate coords so E_z in this frame = 0
             # phi = 0 we preserve x and y
             E_vec = self._rotate_efield(E_vec, phi,  theta)
             # should E_z really be zero? Non TEM modes in air? No
@@ -118,13 +122,12 @@ class Dipole:
             # polarisation
 
             # xy field (polarisation) transformation to recover original x-y basis
-            # (don't use this if tracing rays in system! Want basis to stay meridonal)
             if xy_basis:
                 E_vec_x = E_vec[0]*np.cos(phi) - E_vec[1]*np.sin(phi)
                 E_vec_y = E_vec[0]*np.sin(phi) + E_vec[1]*np.cos(phi)
 
-            E_vec[0] = E_vec_x
-            E_vec[1] = E_vec_y
+                E_vec[0] = E_vec_x
+                E_vec[1] = E_vec_y
 
         return (E_vec, E_mag, n_vec)
 
@@ -190,24 +193,16 @@ class Dipole:
         """
         calculate new E-field based on position in pupil defined by (theta, phi) 
         and radius of curved pupil (which gives the ray height)
-        
-        Ray tracing we perform is fairly basic and doesn't include thinking about
-        ray heights, just the final angles of the e-field and k vector
-        This is how it is done in obSTORM paper, maybe we will revisit considering
-        full tracing method. Maybe we will include the path different (can just do
-        this with simple geometry purely with theta)
         """
         # use getEfield to calculate the E field based on a propagation vector
         # and the dipole distribution, i.e. this is used for the calculation
         # between the dipole and entrance pupil, then standard ray tracing is
-        # used after that. In reality since calculating the actual entrance
-        # pupil might be hard, I might just completely overfill the pupil
-        # and lose rays along the way (not very efficient but hey)
+        # used after that.
 
-        # z = working distance if first element in ray tracing is objective
-        # xy_basis=False means we return in meridonal coords, we only want this
-        # when we start tracing, for now we keep in xy_basis
-        E_vec, E_pre, k_vec = self.getEfield(phi, theta, r, xy_basis=False)
+        # xy_basis=False means we return in meridonal coords, only makes a difference
+        # when curved_coords is used though
+        E_vec, E_pre, k_vec = self.getEfield(phi, theta, r, curved_coords=False,\
+            xy_basis=False)
 
         ## now get polarisation: E vector relative to k, only azimuthal
         # convert E and k to useful things for the ray
@@ -228,21 +223,29 @@ class Dipole:
         # magnitude = (E_vec[0]**2 + E_vec[1]**2 + E_vec[2]**2)**0.5
 
         # generate ray in a meridonal plane i.e. polarisation in basis aligned with phi
-        ray_ = ray.PolarRay(self.lda_exc, E_vec, k_vec, E_pre)
+        # do we need k_vec input? can work out with phi, theta
+        rho = r*np.sin(theta)  # ray height
+        ray_ = ray.PolarRay(self.lda_exc, phi, theta, rho, E_vec, k_vec, E_pre)
         return ray_
 
     def generate_pupil_rays(self, NA, f, phi_points=100, theta_points=50):
+        ## IS THE MISTAKE HERE? ##
         """
         Generate rays over varying theta, phi with max theta defined by NA
         Calculate E-field and use theta, phi to define k-vector and generate
         ray objects for each (theta, phi)/each point on entrance pupil(?)
 
         Rays are traced later on in method derived from obSTORM paper, Kim et al.
-
         """
+        self.phi_points = phi_points
+        self.theta_points = theta_points
         max_sin_theta = NA  # assume n = 1
         pupil_theta_range = np.linspace(0,np.arcsin(NA),theta_points)
-        pupil_phi_range = np.linspace(0,2*np.pi,phi_points)
+        # remove this later ? or keep this kind of sampling v v
+        pupil_sin_theta_range = np.linspace(0,max_sin_theta,theta_points)
+        pupil_theta_range = np.arcsin(pupil_sin_theta_range)
+        # pupil_phi_range = np.linspace(0,2*np.pi,phi_points,endpoint=False)
+        pupil_phi_range = np.linspace(0,2*np.pi,phi_points,endpoint=True)
         self.ray_list = [None]*phi_points*theta_points
 
         n = 0
@@ -250,6 +253,27 @@ class Dipole:
             for p_i, phi in enumerate(pupil_phi_range):
                 self.ray_list[n] = self.new_ray(theta, phi, f, include_prefactor=False)
                 n += 1
+
+    def generate_pupil_rays_input(self, f, phi_points, theta_points, areas=None, areas_alt=None):
+        """
+        N_phi is array of length N_ring with the number of azimuthal rays for a ring with unique a polar angle 
+        """
+        num_theta_points = len(theta_points)
+        num_phi_points = len(phi_points)
+        if num_theta_points != num_phi_points:
+            raise Exception("Array length mismatch") 
+        self.ray_list = [None]*num_phi_points
+        # print("ray list", len(self.ray_list))
+        # print("theta/phi points", num_phi_points)
+
+        n = 0
+        for i in range(num_phi_points):
+            self.ray_list[i] = self.new_ray(theta_points[i], phi_points[i], f, include_prefactor=False)
+
+        self.phi_points = num_theta_points
+        self.theta_points = num_phi_points
+        self.areas = areas
+        self.areas_alt = areas_alt
         
     def generate_pupil_field(self, NA, r=1, pupil='curved', return_coords=False,\
         rescale_energy=False, phi_points=100, sin_theta_points=50,\
@@ -265,17 +289,26 @@ class Dipole:
             imag component !!
         """
         max_sin_theta = NA  # assume n = 1
-        pupil_sin_theta_range = np.linspace(0,max_sin_theta,sin_theta_points)
-        pupil_theta_range = np.arcsin(pupil_sin_theta_range)
+        # sine theta sampling
+        # pupil_sin_theta_range = np.linspace(0,max_sin_theta,sin_theta_points)
+        # pupil_theta_range = np.arcsin(pupil_sin_theta_range)
+
+        # test - same method as using rays REMOVE LATER
+        pupil_theta_range = np.linspace(0,np.arcsin(NA),sin_theta_points)
+        pupil_sin_theta_range = np.sin(pupil_theta_range)
+
         pupil_phi_range = np.linspace(0,2*np.pi,phi_points)
 
-        pupil_vals_x = np.zeros([len(pupil_theta_range), len(pupil_phi_range)])
-        pupil_vals_y = np.zeros([len(pupil_theta_range), len(pupil_phi_range)])
+        pupil_vals_x = np.zeros([len(pupil_theta_range), len(pupil_phi_range)],\
+            dtype=np.complex_)
+        pupil_vals_y = np.zeros([len(pupil_theta_range), len(pupil_phi_range)],\
+            dtype=np.complex_)
         pupil_vals_mag = np.zeros([len(pupil_theta_range), len(pupil_phi_range)],\
             dtype=np.complex_)  # the mag prefactor has a phase term
 
         phi_list = np.zeros([len(pupil_theta_range) * len(pupil_phi_range)])
         sin_theta_list = np.zeros([len(pupil_theta_range) * len(pupil_phi_range)])
+        theta_list = np.zeros([len(pupil_theta_range) * len(pupil_phi_range)])
 
         # evaluate the field across the pupil
         i = 0
@@ -292,6 +325,8 @@ class Dipole:
                 elif pupil == 'bfp':  # back focal plane, used for testing, refracts
                     e_vec, e_mag, k_vec = self.getEfield_bfp(phi, theta, WD=r,
                         rescale_energy=rescale_energy)
+                elif pupil == 'debug_curved_tf':
+                    e_vec, e_mag, k_vec = self.getEfield(phi, theta, r, curved_coords=False)
                 # print(e_vec)
                 # print('######')
                 if not include_phase_factor:
@@ -299,23 +334,32 @@ class Dipole:
 
                 pupil_vals_x[t_i, p_i] = e_vec[0]*e_mag
                 pupil_vals_y[t_i, p_i] = e_vec[1]*e_mag
+                
                 pupil_vals_mag[t_i, p_i] = e_mag  # unused?
 
-                phi_list[i] = pupil_phi_range[p_i]
-                sin_theta_list[i] = pupil_sin_theta_range[t_i]
+                phi_list[i] = phi
+                sin_theta_list[i] = np.sin(theta)
+                theta_list[i] = theta
                 i += 1
 
         #grid of values, interpolated a bit more?
 
-        grid_sin_theta, grid_phi = np.meshgrid(pupil_sin_theta_range, pupil_phi_range)
-        
-        if return_coords:
-            points = (sin_theta_list, phi_list)
+        grid_p, grid_r = np.meshgrid(pupil_phi_range, pupil_sin_theta_range)
+        points = (sin_theta_list, phi_list)
+
+        # if return_coords:
+        #     points = (sin_theta_list, phi_list)
 
         vals_efield_x = pupil_vals_x.flatten()
         vals_efield_y = pupil_vals_y.flatten()
 
-        return (pupil_phi_range,pupil_sin_theta_range), pupil_vals_x, pupil_vals_y
+        # interp into sine projection
+        interp_intensity_x = griddata(points, vals_efield_x, (grid_r, grid_p),\
+            method='cubic',fill_value=0)
+        interp_intensity_y = griddata(points, vals_efield_y, (grid_r, grid_p),\
+            method='cubic',fill_value=0)
+
+        return (pupil_phi_range,pupil_sin_theta_range), interp_intensity_x, interp_intensity_y
     
 
 class ComplexDipole(Dipole):
