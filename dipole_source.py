@@ -1,9 +1,7 @@
-from ray import MerdinonalRay
 from matplotlib import pyplot as plt
 import numpy as np
 import dipole
 import dipole_distribution_generator as dipole_distribution
-import single_dipole
 from tools import printif
 
 class DipoleSource:
@@ -132,6 +130,7 @@ class DipoleSource:
 
     def generate_uniform_dipoles(self):
         """Bauer method"""
+        raise NotImplementedError()
         pass
 
     def plot_distribution(self, alphas=None):
@@ -391,8 +390,9 @@ class DipoleSource:
             areas_alt_k = np.append(areas_alt_k, [area_manual]*n_cells_fitting[i+1])
             areas_usingcaps = np.append(areas_usingcaps, [area_cap_method]*n_cells_fitting[i+1])
 
+        # print("phi_k", phi_k)
 
-        manual_area_sum = np.sum(areas_usingcaps)
+        manual_area_sum = np.sum(areas_alt_k)
 
         self.NA = NA
         self.ray_area = manual_area_sum
@@ -403,13 +403,13 @@ class DipoleSource:
         print("manual (cap method) area sum", manual_area_sum)
         print("expected area sum", expected_area)
 
-        self.ray_area_manual = np.sum(areas_usingcaps[0:last_idx])
+        self.ray_area_manual = manual_area_sum # np.sum(areas_alt_k[0:last_idx])
         
 
         for n in range(len(self.dipole_ensemble)):  # loop over dipoles
             dipole = self.dipole_ensemble[n]
             # TODO: revert to normal area at some point
-            dipole.generate_pupil_rays_input(f, phi_k, theta_k, area_k)
+            dipole.generate_pupil_rays_input(f, phi_k, theta_k, areas_usingcaps)
 
         self.ray_count = len(phi_k)
         if plot_sphere:

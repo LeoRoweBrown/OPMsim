@@ -27,6 +27,8 @@ class PolarRay:
         self.isMeridional = False
         # if ray is above (+1) or below (-1) optic axis
         self.orientation = 1
+        self.escaped = False
+        self.area_scaling = 1
         # convert these into 
 
         # [cos(phi_ray), sin(phi_ray), 0]
@@ -47,8 +49,7 @@ class PolarRay:
                 + self.k_vec[1]*self.k_vec[1])**0.5/self.k_vec[2])
 
     def update_history(self, note=None):
-        if note is not None:
-            self.note = note
+        self.note = note
         if self.keep_history:
             self.ray_history.append(copy.deepcopy(self))
 

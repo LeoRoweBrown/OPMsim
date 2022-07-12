@@ -115,6 +115,7 @@ def trace_rays_mp(system, source, processes=4, binning_detector=False):
         is_curved_pupil = False
         print("Flat pupil")
 
+    # add labels to last and first lenses
     elements = get_first_and_last_lens(elements)
 
     dipole_count = len(source.dipole_ensemble)

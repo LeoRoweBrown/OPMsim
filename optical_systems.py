@@ -9,7 +9,8 @@ import graphics
 import anisotropy
 import time
 
-def objective_system(lenses, source_dict=None, processes=2, plot=True):
+
+def objective_system(lenses, source_dict=None, processes=2, plot=True, title="OPM"):
     """
     O1, O2, O3 are dictionaries with fields NA, f and source is a dictionary
     with dipole_source and source name
@@ -26,127 +27,82 @@ def objective_system(lenses, source_dict=None, processes=2, plot=True):
     source = source_dict['source']
 
     O1 = lenses[0]
-    source.get_rays(O1['NA']/O1['n'], O1['f'])
+    source.get_rays_uniform_rings(O1['NA']/O1['n'], O1['f'], ray_count=1000)
+    dipoles = source.dipole_ensemble
+    dp = dipoles[0]
+    rays = dp.ray_list
+    print("N rays", len(rays))
+    thetas = np.zeros_like(rays)
+    for r in range(len(rays)):
+        # print("ray")
+        thetas[r] = rays[r].theta
+    print("Starting thetas", thetas)
 
     elements = []
 
-    for i in lenses:
-        lens = lenses[0]
+    for lens in lenses:
         rot = 0
+        print(lens)
         if 'rotation' in lens:
             rot = lens['rotation']*np.pi/180
+        print("Lens rotation:", rot)
         elements.append(optical_elements.SineLens(lens['NA']/lens['n'], lens['f'], xAxis_rotation=rot))
 
-    system = {'name': 'OPM', 'elements': elements}
+    system = {'name': title, 'elements': elements}
+
+    dipole = source.dipole_ensemble[0]
+    rays = dipole.ray_list
 
     init_time = time.time() - init_start
     print("initialisation time in OPM system %fs" % init_time)
 
     trace_start = time.time()
-    output = trace_system.trace_rays_mp(system, source, processes)
+    output = trace_system.trace_rays_mp(system, source, processes, binning_detector=True)
     trace_time = time.time() - trace_start
     print("time in trace_rays_mp %fs" % trace_time)
     pupil = output.pupil_plot
 
+    # pupil.plot(system['name'], save_dir=None, file_name=None,\
+    #     show_prints=False, plot_arrow=None)
     pupil.plot(system['name'], save_dir=None, file_name=None,\
-        show_prints=False, plot_arrow=None)
-    pupil.plot(system['name'], save_dir=None, file_name=None,\
-        show_prints=False, plot_arrow=None, projection=None)
+        show_prints=False, plot_arrow=None, projection=None, unstructured_data=True)
+    """
+    rays = output.detector.dipole_source.dipole_ensemble[0].ray_list
+    history = rays[0].ray_history
+    print(history)
+    for i in range(len(history)):
+        print(i, history[i].note)
 
+    theta_prelens = np.zeros(len(rays))
+    phi_prelens = np.zeros(len(rays))
+    xyz = np.zeros([3, len(rays)])
+    rhos = np.zeros(len(rays))
+
+    for n in range(len(rays)):
+        theta_prelens[n] =  rays[n].ray_history[1].theta
+        phi_prelens[n] = rays[n].ray_history[1].phi
+        xyz[0, n] = rays[n].ray_history[1].k_vec[0]
+        xyz[1, n] = rays[n].ray_history[1].k_vec[1]
+        xyz[2, n] = rays[n].ray_history[1].k_vec[2]
+        rhos[n] = rays[n].ray_history[1].rho
+        # print("escaped", rays[n].escaped)
+
+    f3d = plt.figure(figsize=[15,8])
+    ax = f3d.add_subplot(121, projection='3d')
+    ax.scatter(xyz[0],xyz[1],xyz[2])
+    ax.set_xlim3d([-1,1])
+    ax.set_ylim3d([-1,1])
+    ax.set_zlim3d([-1,1])
+
+    f = plt.figure()
+    ax = f.add_subplot(121) 
+    ax.scatter(rhos*np.cos(phi_prelens), rhos*np.sin(phi_prelens), s=1)
+    ax1 = f.add_subplot(122)
+    ax1.scatter(np.sin(theta_prelens)*np.cos(phi_prelens), np.sin(theta_prelens)*np.sin(phi_prelens), s=1)
+    plt.show()
+    """
     return output
 
-
-def two_objective_system(collection_NA, collection_f, second_NA, second_f, source=None, source_name=None):
-    elements = []
-    elements.append(optical_elements.SineLens(collection_NA, collection_f))
-    elements.append(optical_elements.SineLens(second_NA, second_f))
-
-    system = {'name': 'Two objective, ' + source_name, 'elements': elements}
-    if source is None:
-        source = dipole_source.DipoleSource()
-        source.add_dipoles(0, 0)
-        source.get_rays(collection_NA, collection_f)
-
-    pupil = trace_system.trace_rays(system, source, collection_NA)
-
-    f, pc_list = pupil.plot(system['name'], save_dir=None, file_name=source_name +'.png',\
-        show_prints=False, plot_arrow=None)
-
-    print("fig", f)
-    print(pc_list)
-    plt.show(f)
-    return pc_list
-
-def no_objective_system(collection_NA, collection_f, dipole_orientation=(0,0)):
-    elements = []
-    system = {'name': 'No objective [TEST], single x-dipole', 'elements': elements}
-    source = dipole_source.DipoleSource()
-    # source.add_dipoles(0, np.pi/2)
-    source.add_dipoles(dipole_orientation[0], dipole_orientation[1])
-    source.get_rays(collection_NA, collection_f)
-    # for n in range(len(dp.ray_list)):
-    #     print(dp.ray_list[n].E_vec)
-
-
-    pupil = trace_system.trace_rays(system, source, collection_NA)
-
-    ## testing ##
-    dp = source.dipole_ensemble[0]
-    (pupil_phi_range,pupil_sin_theta_range), pupil_vals_x, pupil_vals_y = \
-    dp.generate_pupil_field(collection_NA, collection_f, pupil='curved', return_coords=False,\
-        rescale_energy=False, phi_points=100, sin_theta_points=50,\
-        include_phase_factor=False)
-    import plot_multiple_dipoles
-    intensity_x = np.real(pupil_vals_x)**2 + np.imag(pupil_vals_x)**2
-    intensity_y = np.real(pupil_vals_y)**2 + np.imag(pupil_vals_y)**2
-    np.savetxt('xdata_method1.csv', intensity_x, delimiter=',')
-    plot_multiple_dipoles.plot_pupil('generate_pupil_field()', (pupil_phi_range,pupil_sin_theta_range),\
-        intensity_x, intensity_y)
-    #############
-
-    # dp = source.dipole_ensemble[0]
-    # for n in range(len(dp.ray_list)):
-    #     print(dp.ray_list[n].E_vec)
-    np.savetxt('xdata_method2.csv', pupil.data_x, delimiter=',')
-    pupil.plot(system['name'], save_dir=None, file_name=None,\
-        show_prints=False, plot_arrow=None)
-
-    resid_x = compare_methods(intensity_x, pupil.data_x)
-    resid_y = compare_methods(intensity_y, pupil.data_y)
-
-    # get rid of crazy bits for now
-    #resid_x[resid_x > 1] = 1
-    #resid_y[resid_y > 1] = 1
-
-    pupil_resid = graphics.PupilPlotObject(pupil.polar_radii, pupil.polar_angles, resid_x, resid_y)
-    pupil_resid.plot("percentage residuals", save_dir=None, file_name=None,\
-        show_prints=False, plot_arrow=None)
-
-    # try using theta from original
-    pupil.polar_angles, pupil.polar_radii = pupil_phi_range, pupil_sin_theta_range
-    pupil.plot(system['name'] + ' with r and theta from original', save_dir=None, file_name=None,\
-        show_prints=False, plot_arrow=None)
-
-
-def objective_qwp_system(collection_NA, collection_f, delta, second_NA, second_f):
-    source = dipole_source.DipoleSource()
-    source.add_dipoles(0, 0)
-    source.get_rays(collection_NA, collection_f)
-    elements = []
-    elements.append(optical_elements.SineLens(collection_NA, collection_f))
-    elements.append(optical_elements.LinearPolariser(delta))
-    elements.append(optical_elements.WavePlate(0,np.pi/2))
-    elements.append(optical_elements.SineLens(second_NA, second_f))
-
-    system = {'name': 'O1, LP, QWP, O2', 'elements': elements}
-
-    pupil_plot = trace_system.trace_rays(system, source, collection_NA)
-    f, pc_list = pupil_plot.plot(system['name'], save_dir=None, file_name=None,\
-    show_prints=False, plot_arrow=None)
-    print("fig", f)
-    print(pc_list)
-    plt.show(f)
-    return pc_list
 
 def anisotropy_measuring_system(collection_NA, collection_f, excitation_polarisation, source=None, two_obj=False, processes=1):
     init_start = time.time()

@@ -50,13 +50,18 @@ class BinningDetector():
 
         rays = dipole.ray_list
 
-        if self.resolution is None:
-            self.resolution = [np.max(dipole.phi_points), dipole.theta_points]
+        # remove rays that are lost
+        rays_before = len(rays)
+
+        escaped = [ray.escaped for ray in rays]
+
+        rays = [ray for ray in rays if not ray.escaped]  # hopefully doesnt wreak havoc
 
         ray_Ex_re = np.array([None]*len(rays))
         ray_Ey_re = np.array([None]*len(rays))
         ray_Ex_im = np.array([None]*len(rays))
         ray_Ey_im = np.array([None]*len(rays))
+        ray_area_scaling = np.array([None]*len(rays))
         ray_polar_radius = np.array([None]*len(rays), dtype=float)
         ray_phi = np.array([None]*len(rays), dtype=float)
         ray_phi_not_mod = np.array([None]*len(rays), dtype=float)
@@ -65,16 +70,42 @@ class BinningDetector():
         ray_Ey_cx = np.array([None]*len(rays), dtype=np.complex_)
         E_vec = 0j
 
+        print("Rays lost = %d" % (rays_before-len(rays)))
+        print("Final ray count = %d" % len(rays))
+        thetas = np.zeros_like(rays)
+        rhos = np.zeros_like(rays)
+        for r in range(len(rays)):
+            # print("ray")
+            thetas[r] = rays[r].theta
+            rhos[r] = rays[r].rho
+        print("ending thetas", thetas)
+        print("Working on curved surface?", self.curved)
 
         for n, ray in enumerate(rays):
             if ray.isMeridional:  # put back into non meridional basis
                 ray.E_vec = np.matmul(
                     optical_matrices.meridional_transform(ray.phi, inverse=True),\
                     ray.E_vec)
+                ## added this 17/06/2022, is this correct here?
+                # ray.k_vec = np.matmul(
+                #     optical_matrices.meridional_transform(ray.phi, inverse=True),\
+                #     ray.k_vec)
+
                 ray.isMeridional = False
             # if curved we evaluate the field over a curved surface, which needs curved coord system
 
+            # check dot product
             if self.curved:  # curved pupil
+                print("kvec", ray.k_vec)
+                print("E_vec", ray.E_vec)
+                print("dot product before curved correction:", np.dot(ray.E_vec, ray.k_vec))
+                # transform so E_vec defined in coordinates defined by k_vec (i.e. E_z = 0)
+                theta =  np.arctan((ray.k_vec[0]**2+ray.k_vec[1]**2)**0.5/ray.k_vec[2])
+                phi = np.arctan2(ray.k_vec[1], ray.k_vec[0]) + np.pi
+                
+                # TODO: TEMP, replace this, replacing phi and theta with k_vec calculated versions
+                print("theta, phi from k_vec", theta, phi)
+                print("theta, phi from ray.theta, ray.phi", ray.theta, ray.phi)
                 E_vec = self.rotate_field_curved_surface(
                     ray.E_vec, ray.phi, ray.theta)#attr=True))
                 
@@ -85,6 +116,16 @@ class BinningDetector():
                 ray.update_history()  # before changing from (-r, phi) -> (r, phi+180)
 
             ray_polar_radius[n], ray_phi[n] = get_final_polar_coords(ray, curved=self.curved)
+            print("ray_polar_radius", ray_polar_radius[n])
+
+            if np.isnan(ray_phi[n]):
+                raise Exception("NaN in phis at detector (after get final polar coords)")
+            if np.isnan(ray.phi):
+                raise Exception("NaN in phis at detector")
+            if np.isnan(np.sin(ray.theta)) and np.isnan(np.sin(ray.rho)):
+                raise Exception("NaN in ray.theta or ray.rho at detector")
+            if np.isnan(ray_polar_radius[n]):
+                raise Exception("NaN in ray_polar_radius at detector (after get final polar coords)")
 
             if ray_phi[n] > 2*np.pi:
                 Warning("Phi bigger than 2pi")
@@ -94,17 +135,20 @@ class BinningDetector():
             ray_Ex_im[n] = np.imag(E_vec[0])
             ray_Ey_im[n] = np.imag(E_vec[1])
 
+            ray_area_scaling[n] = ray.area_scaling
+
             # used in different method
             ray_Ex_cx[n] = E_vec[0]
             ray_Ey_cx[n] = E_vec[1]
 
             # I don't do cosine scaling here, the view is just distorted not image/focused
-
+        # print('polar radii', ray_polar_radius)
         # different method - use this for applying classical photoselection
         self.ray_polar_radius = ray_polar_radius # .astype(float)
         self.ray_phi = ray_phi
         self.ray_areas = dipole.areas
         self.ray_areas_alt = dipole.areas_alt  # move these to dipole source
+        self.ray_area_scaling = ray_area_scaling
 
         self.Ix_raw += \
             (np.real(ray_Ex_cx)*np.real(ray_Ex_cx) + np.imag(ray_Ex_cx)*np.imag(ray_Ex_cx))*dipole.density
@@ -115,11 +159,35 @@ class BinningDetector():
 
         from matplotlib import pyplot as plt
 
-        ray_phi = np.asarray(ray_phi, dtype=np.float64)
+        self.ray_phi = np.asarray(ray_phi, dtype=np.float64)
 
-        rad = ray_polar_radius*np.cos(ray_phi)
-        phi = ray_polar_radius*np.sin(ray_phi)
-        print("lengths phi, rad, data", len(rad), len(phi), len(self.Ix_raw))
+        self.unstructured_x = ray_polar_radius*np.cos(self.ray_phi)
+        self.unstructured_y = ray_polar_radius*np.sin(self.ray_phi)
+
+        ## distribution of theta and phi
+        # TODO: why is ray_polar_radius restricted to a few values
+        # while thetas is (correctly) many
+        fig = plt.figure()
+        plt.scatter(ray_polar_radius, ray_phi)
+        plt.show()
+        fig2 = plt.figure()
+        plt.scatter(thetas, ray_phi)
+        plt.show()
+        fig3 = plt.figure()
+        plt.scatter(rhos, ray_phi)
+        plt.show()
+
+
+        print("len thetas", len(thetas))
+        print("len polar radii", len(ray_polar_radius))
+        ## issue is that theta is negative?
+
+        if any(np.isnan(self.ray_phi)):
+            raise Exception("NaN error in phi in binning detector")
+        print(self.ray_phi)
+        print(self.ray_polar_radius)
+
+        # print("lengths phi, rad, data", len(rad), len(phi), len(self.Ix_raw))
 
         """
         fig = plt.figure()
@@ -154,8 +222,8 @@ class BinningDetector():
         ## graphs https://stackoverflow.com/questions/66520769/python-contour-polar-plot-from-discrete-data
         """
 
-    def integrate_pupil(self):
-        print(self.ray_areas)
+    def integrate_pupil_old(self):
+        # print(self.ray_areas)
         self.Ix_integral = 0
         self.Iy_integral = 0
         total_area = np.sum(self.ray_areas)
@@ -176,6 +244,27 @@ class BinningDetector():
         self.Iy_integral /= total_area
         self.I_total_integral = self.Ix_integral + self.Iy_integral
 
+    def integrate_pupil(self):
+        # print(self.ray_areas)
+        self.Ix_integral = 0
+        self.Iy_integral = 0
+        total_area = np.sum(self.ray_areas)
+        print("total area of elements (curved)", total_area)
+        total_area_flat = 0
+        area_scaling = 1 
+        for n in range(len(self.ray_phi)):
+            theta = np.arcsin(self.ray_polar_radius[n])
+            area_scaling = self.ray_area_scaling[n]
+            total_area_flat += self.ray_areas[n]*area_scaling
+            self.Ix_integral += self.ray_areas[n]*self.Ix_raw[n]*area_scaling
+            self.Iy_integral += self.ray_areas[n]*self.Iy_raw[n]*area_scaling
+
+        # area check
+        print("total_area_flat", total_area_flat)
+        self.Ix_integral /= total_area
+        self.Iy_integral /= total_area
+        self.I_total_integral = self.Ix_integral + self.Iy_integral
+
 
 
     def generate_detector_pixels(self):
@@ -184,7 +273,9 @@ class BinningDetector():
         0th index for phi and 1th index for polar radius
         """
         if self.max_polar_radius is None:
+            print("self.max_polar_radius is None")
             self.max_polar_radius = np.max(self.ray_polar_radius)
+            print(self.max_polar_radius)
         phi_pixels = self.resolution[0]
         radial_pixels = self.resolution[1]
         
@@ -223,8 +314,9 @@ class BinningDetector():
         # +1 becuse N+1 bin boundaries for N bins
         radius_bins = np.linspace(0, self.max_polar_radius+1e-9, self.resolution[1]+1)
         # pupil_radius_range += pupil_radius_range[1] # shift so that labels are not starting from 0
-        phi_bins = np.linspace(0,2*np.pi, self. resolution[0]+1)
+        phi_bins = np.linspace(0,2*np.pi+1e-9, self.resolution[0]+1)
         # + 1e-9 to include max point since binning has hard inequality on right side of bin
+        print("resolutions",  self.resolution[0], self.resolution[1])
 
         pupil_phi_range = np.linspace(0,2*np.pi,self.resolution[0], endpoint=False) 
         phi_off = pupil_phi_range[1]/2
@@ -234,28 +326,16 @@ class BinningDetector():
         digitized_phi = np.digitize(self.ray_phi, phi_bins, right=False)-1
         digitized_radius = np.digitize(self.ray_polar_radius, radius_bins, right=False)-1
 
-        # plt.plot(hist_vals, pupil_radius_range)
-        # plt.show()
-
-        # TODO: is this right? Shouldn't this be meshgridded or something - 
-        # combination of radius/phi matters - can't treat them independently.
-
-        # scipy.stats.binned_statistics_2d <---
-
-        # 2d matrix for binning
-        # scipy.stats.binned_statistic_2d(self.ray_phi, self.ray_polar_radius, values, bins = (radius_bins, phi_bins)
-
-        # plt.figure()
-        # plt.hist(digitized_phi, bins=100)
-        # plt.xlabel("phi values after numpy digitize bin ")
-        # plt.show()
-        # print("min dig phi", np.min(digitized_phi))
-        # print("len phi dig", len(digitized_phi))
-        # print("len r dig", len(digitized_radius))
-        # print("size data", np.shape(self.current_ifield_x))
-
-        # print(np.max(digitized_phi))
-        # print(np.max(digitized_radius))
+        if np.max(digitized_phi) >= np.shape(self.current_ifield_x)[0]:
+            print("phi_bins", phi_bins)
+            print("ray_phi", self.ray_phi)
+            print("max index", print(np.max(digitized_phi)))
+            raise Exception("Phi binning indices out of range: check for negative or NaN values")
+        if np.max(digitized_radius) >= np.shape(self.current_ifield_x)[1]:
+            print("phi_bins", radius_bins)
+            print("ray_phi", self.ray_polar_radius)
+            print("max index", print(np.max(digitized_radius)))
+            raise Exception("Polar radius binning indices out of range: check for negative or NaN values")
 
         for n in range(len(self.ray_phi)):
 
@@ -265,8 +345,8 @@ class BinningDetector():
             if digitized_radius.any() >= radial_pixels:
                 Warning("Radial position of ray exceeds max radius range")
                 continue
-
-
+            # print("phi", digitized_phi[n])
+            # print("rad", digitized_radius[n])
             self.current_ifield_x[digitized_phi[n], digitized_radius[n]] \
                 += self.Ix_raw[n]
             self.current_ifield_y[digitized_phi[n], digitized_radius[n]] \
@@ -356,6 +436,7 @@ class BinningDetector():
     def rotate_field_curved_surface(self, E_vec, phi, theta):
         # rotate into meridional by phi and then in theta so k perpendicular to surface
         # E_vec = deepcopy(E_vec_in) # to be safe
+
         E_vec = self._rotate_efield(E_vec, phi, theta)
         Ex = np.absolute(E_vec[0])
         Ey = np.absolute(E_vec[1])
