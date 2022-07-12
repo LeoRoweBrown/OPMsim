@@ -84,6 +84,9 @@ def get_final_polar_coords(ray, curved=True):
         phi = phi - mask*2*np.pi
         if not curved:  # abs already takes care of this in curved case
             r = -r
+    # general moduluo
+    mask = (phi > 2*np.pi)*1  # use this instead of modulu seemed to work better?
+    phi = phi - mask*2*np.pi
     return r, phi
 
 # def get_final_polar_coords(r, phi):
