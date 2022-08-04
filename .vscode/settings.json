@@ -3,5 +3,6 @@
     "jupyter.jupyterServerType": "local",
     "python.analysis.extraPaths": [
         "./graphics"
-    ]
+    ],
+    "editor.tabCompletion": "on"
 }

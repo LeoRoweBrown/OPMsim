@@ -6,6 +6,9 @@ import numpy as np
 from numpy.ma.core import masked_greater
 import optical_matrices
 import scipy.interpolate as interp
+from matplotlib import pyplot as plt
+import graphics
+
 # Base class for all elements
 # I include the possibiliy of off-axis elements and rotated about x even though
 # this is unlikely to be supported (maybe rotations will)
@@ -14,231 +17,183 @@ class Element():
     def __init__(self):
         self.type = 'Empty element'
 
-    def apply_matrix(self, ray):
-        ray.update_history()
+    def apply_matrix(self, rays):
+        rays.update_history()
         return np.identity(3)
-
 
 class SineLens(Element):
     """Ideal lens that meets Abbe sine condition"""
-    def __init__(self, NA, focal_length, xAxis_rotation = 0, binning_method=False, lens_position=None, direction=1, D=None, isExitPupil=False, endTracingAt=None, dz=0):
+    def __init__(self, NA, focal_length, xAxis_rotation = 0, binning_method=False,
+                n=1, D=None):
         self.type = 'SineLens'
         self.focal_length = focal_length
-        self.NA = NA
+        self.NA = NA/n  # we use effective NA (as if lens were in air)
         self.xAxis_rotation = xAxis_rotation
         # used to determine if we stop ray tracing immediately after first surface
-        self.isExitPupil = isExitPupil
-        self.endTracingAt = endTracingAt  # for field probing and stuff
-        self.dz = dz
-        self.lens_position = lens_position
+
         self.binning_method = binning_method
 
         if D is None:
             self.D = 2*focal_length*NA
-        elif abs(D - 2*focal_length*NA) > 1e-3*D:
+        elif abs(D - 2*focal_length*NA) > 1e-6*D:
             raise ValueError("D, NA and f are not in agreement")
         else:
             self.D = D
 
-    def apply_matrix(self, ray):
-        ray.update_history()
-        
-        print("theta at START of apply matrix of lens:", ray.theta, "rho:", ray.rho, "escaped? ", ray.escaped,\
-            "rot", self.xAxis_rotation)
-        # print("applying matrix see if phi is nan")
-        if np.isnan(ray.phi):
-            raise Exception("NaN in phi after ray rotation in objective")
-        if self.xAxis_rotation != 0:
-            # this is broken and needs fixing - wraparound issue?
-            print("rotating rays by", self.xAxis_rotation)
-            self.rotate_ray_x(ray)  # for angled lenses i.e. O3
-            ray.update_history(("x_axis rotation %.2f rads before lens" % self.xAxis_rotation))
-        if not ray.isMeridional:
-            ray.E_vec = np.matmul(optical_matrices.meridional_transform(ray.phi), ray.E_vec)
-            ray.k_vec = np.matmul(optical_matrices.meridional_transform(ray.phi), ray.k_vec)
-            ray.isMeridional = True
+    def apply_matrix(self, rays):
+        rays.update_history()
 
-        # should just be the same as ray.theta in magnitude because of the constraints
-        # theta used in rotaton matrx
-        # print("ARCSINE ARG", (ray.rho/self.focal_length))
-        # if abs(ray.rho) >= self.focal_length:
-        #     ray.escaped = True  # not physical for sine lens to be able to focus this
-        #     lens_theta = ray.rho/abs(ray.rho)*np.pi/2  # set magnitude to 90 degrees
-        # else:
-        #     lens_theta = np.arcsin(ray.rho/self.focal_length)  # positive is anticlockwise rotation
+        if any(np.isnan(rays.phi[np.invert(rays.escaped)])):
+            raise Exception("NaN(s) in phi after ray rotation in objective")
+        if self.xAxis_rotation != 0:
+            print("rotating rays by", self.xAxis_rotation)
+            self.rotate_ray_x(rays)  # for angled lenses i.e. O3
+            rays.update_history(("x_axis rotation %.2f rads before lens" % self.xAxis_rotation))
+        if not rays.isMeridional:
+            # I don't trust this, need to fix it? use multiplication here for now
+            # horrible loop method to check:
+            # for n in range(len(rays.I_vec)):
+            #     rays.I_vec[n,:,:] = \
+            #         optical_matrices.meridional_transform(rays.phi[n]) @ rays.I_vec[n,:,:]
+            #     rays.k_vec[n,:,:] = \
+            #         optical_matrices.meridional_transform(rays.phi[n]) @ rays.k_vec[n,:,:]
+
+            # rays.I_vec = optical_matrices.meridional_transform_tensor(rays.phi) @ rays.I_vec
+            # rays.k_vec = optical_matrices.meridional_transform_tensor(rays.phi) @ rays.k_vec
+            # rays.isMeridional = True
+            rays.meridional_transform()
 
         # default case is clockwise rotation, 
         # but this is incorrect for when rays cross optic axis, fixed by using rho but
         first_curved = False
-        old_theta = ray.theta
-        # v means first surface is flat (parallel/collimated incoming rays) v
-        if abs(old_theta) < 1e-10:  # soft inequality for theta = 0
+        old_theta = rays.theta
+
+        print("minumum of intensities (x)", np.min(rays.I_vec[:,0]))
+        print("minumum of intensities (y)", np.min(rays.I_vec[:,1]))
+
+        x = rays.rho*np.cos(rays.phi)
+        y = rays.rho*np.sin(rays.phi)
+
+        if all(rays.rho == 0):
+            x = np.sin(rays.theta)*np.cos(rays.phi)
+            y = np.sin(rays.theta)*np.sin(rays.phi) 
+
+        merid_pupil = graphics.PupilPlotObject(x, y, rays.I_vec[:,0],  rays.I_vec[:,1])
+        merid_pupil.plot("meridian pupil during lens")
+
+        # this condition means first surface is flat (parallel/collimated incoming rays)
+        if all(abs(old_theta[np.invert(rays.escaped)] < 1e-10)):  # soft inequality for theta = 0
             first_curved = False
-            # 2022 07 01 - put this in if statements to get order right:
-            print("ARCSINE ARG", (ray.rho/self.focal_length))
-            if abs(ray.rho) >= self.focal_length:
-                ray.escaped = True  # not physical for sine lens to be able to focus this
-                lens_theta = ray.rho/abs(ray.rho)*np.pi/2  # set magnitude to 90 degrees
-            else:
-                lens_theta = np.arcsin(ray.rho/self.focal_length)  # positive is anticlockwise rotation
-            new_theta = ray.theta - lens_theta
-            ## -----------------------------
-            if abs(ray.rho) > self.D/2:  # Ray escapes system
-                print("ray escaped!")
-                # raise Exception("ray escaped")
-                ray.E_vec *= 0
-                ray.theta = 0  # for safety, consider changing (TODO)
-                ray.phi = 0
-                ray.rho = 0
-                ray.escaped = True  # return a Nonetype?
-            else:
-                ray.theta = new_theta  # consider using k_vec to calculate rather than doing this?
-            # v remove this TODO v
-            if self.isExitPupil or self.endTracingAt == 1:  # for probing field, tbd, remove later?
-                return #ray
-            ray.E_vec = np.matmul(optical_matrices.refraction_meridional(-lens_theta), ray.E_vec)
-            ray.k_vec = np.matmul(optical_matrices.refraction_meridional(-lens_theta), ray.k_vec)
-            ray.phase += self.focal_length*(1-np.cos(lens_theta))  # extra phase at edges
-            # if self.endTracingAt == 2:
-            #    return
-            # if self.lens_position != 'last':  # if last objective, leave rays along curved pupil
-            self.trace_f(ray)
+            
+            escape_mask_rho = abs(rays.rho) >= self.focal_length
+            rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
 
-        # we instead add the phase after the second surface and trace first 
+            lens_theta = np.arcsin(rays.rho/self.focal_length)  # positive is anticlockwise rotation
+            new_theta = rays.theta - lens_theta
+
+            # if abs(rays.rho) > self.D/2:  # Ray escapes system
+            escape_mask_na = abs(rays.theta) > np.arcsin(self.NA)
+            rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
+
+            rays.theta = new_theta  # consider using k_vec to calculate rather than doing this?
+
+            rays.I_vec = \
+                optical_matrices.refraction_meridional_tensor(-lens_theta) @ rays.I_vec
+            rays.k_vec = \
+                optical_matrices.refraction_meridional_tensor(-lens_theta) @ rays.k_vec
+
+            self.trace_f(rays)
+
         # when the first is curved
-        if abs(old_theta) > 1e-10:  # means first surface is curved
+        
+        else:  # means first surface is curved
             first_curved = True
-            if self.isExitPupil:
-                raise Warning("Cannot be exit pupil/final element "
-                              "- source not imaged (rays are not focussed")
-            print("ray before tracing to curve, rho:", ray.rho)
-            if self.lens_position != 'first':  # when rays are generated they're already traced here
-                self.trace_f(ray) # trace to first surface
-            print("after tracing ray, rho:", ray.rho)
-            # 2022 07 01 - put this in if statements to get order right:
-            print("ARCSINE ARG", (ray.rho/self.focal_length))
-            if abs(ray.rho) >= self.focal_length:
-                ray.escaped = True  # not physical for sine lens to be able to focus this
-                lens_theta = ray.rho/abs(ray.rho)*np.pi/2  # set magnitude to 90 degrees
-            else:
-                lens_theta = np.arcsin(ray.rho/self.focal_length)  # positive is anticlockwise rotation
-            new_theta = ray.theta - lens_theta
-            ## -----------------------------
+            self.trace_f(rays) # trace to first surface
+
+            escape_mask_rho = abs(rays.rho) >= self.focal_length
+            rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
+
+            lens_theta = np.arcsin(rays.rho/self.focal_length)  # positive is anticlockwise rotation
+            new_theta = rays.theta - lens_theta
+            lens_theta[np.abs(lens_theta) < 1e-9] = 0  # avoid negative values from floating point error
+
+            plt.figure()
+            plt.hist(lens_theta, bins=20)
+            plt.title("new theta")
+            plt.show()
+            plt.figure()
+            plt.hist(rays.phi)
+            plt.title("phi")
+            plt.show()
+
+            # if abs(rays.rho) > self.D/2:  # Ray escapes system
+            escape_mask_na = abs(rays.theta) > np.arcsin(self.NA)
+            rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
+            print("na escape mask")
+            print(escape_mask_na)
+
+            rays.theta = new_theta  # assign new theta
+
+            rays.I_vec = \
+                optical_matrices.refraction_meridional_tensor(-lens_theta) @ rays.I_vec
+            rays.k_vec = \
+                optical_matrices.refraction_meridional_tensor(-lens_theta) @ rays.k_vec
+
+            rays.meridional_transform(inverse=True)
+            refract_pupil = graphics.PupilPlotObject(x, y, rays.I_vec[:,0],  rays.I_vec[:,1])
+            refract_pupil.plot("pupil after refraction")
+
+            print("minumum of intensities after refraction", np.min(rays.I_vec))
 
 
-            # if abs(ray.rho) > self.D/2:  # Ray escapes system
-            if abs(ray.theta) > np.arcsin(self.NA):
-                print("ray escaped!")
-                # raise Exception("ray escaped")
-                ray.E_vec *= 0
-                ray.theta = 0  # for safety
-                ray.phi = 0
-                ray.rho = 0
-                ray.escaped = True
-            else:
-                ray.theta = new_theta  # assign new theta
+        # small angle approximation - think about doing full arc-based calculation
+        #TODO: check this *= change
+        print("min old theta", np.min(old_theta))
+        print("min new theta", np.min(new_theta))
+        # absolute for good mesure
+        rays.area_scaling *= np.abs(np.cos(new_theta)/np.cos(old_theta))
+        print("scaling", rays.area_scaling)
+        print("min of scaling", np.min(rays.area_scaling))
 
-            if self.endTracingAt == 1:  # end before refracting rays
-                return #ray
-            ray.E_vec = np.matmul(optical_matrices.refraction_meridional(-lens_theta), ray.E_vec)
-            ray.k_vec = np.matmul(optical_matrices.refraction_meridional(-lens_theta), ray.k_vec)
-            ray.phase += self.focal_length*(1-np.cos(lens_theta))  # extra phase at edges
-        # cosine scaling, don't scale if binning takes care of ray density change
-        ray.area_scaling = (np.cos(new_theta)/np.cos(old_theta))**0.5
-        if not self.binning_method: 
-            ray.E_vec *= (np.cos(new_theta)/np.cos(old_theta))**0.5
+        # check for NaNs (but ignore escaped rays)
+        if np.isnan(rays.phi[np.invert(rays.escaped)]).any():
+            raise Exception("NaN(s) in phi after objective")
+        # I_vec has more dims, so need .any()
+        if np.isnan(rays.I_vec[np.invert(rays.escaped)]).any():
+            raise Exception("NaN(s) in I-vector after objective")
 
-        print("theta at end of apply matrix of lens:", ray.theta, "rho:", ray.rho, "escaped? ", ray.escaped, "new theta:", new_theta, "lens theta", lens_theta,\
-            "first surf curved", first_curved, "rot", self.xAxis_rotation)
-        # print("finished applying matrix see if phi is nan again")
-        if np.isnan(ray.phi):
-            raise Exception("NaN in phi after objective")
-        if any(np.isnan(ray.E_vec)) and not ray.escaped:
-            raise Exception("NaN in E-vector after objective")
-        return ray
+        # check dot productive of z and yx - should be zero
+        I_k_dot = np.sum(rays.I_vec * rays.k_vec, axis=1)
+        # print(I_k_dot)
+        return rays
 
-    def trace_f(self, ray):
+    def trace_f(self, rays):
         """ Trace by one focal length"""
-        ray.rho += self.focal_length*np.sin(ray.theta)
-        ray.z += self.focal_length*np.cos(ray.theta)
+        rays.rho = rays.rho + self.focal_length*np.sin(rays.theta)
+        # rays.z += self.focal_length*np.cos(rays.theta)
 
-    def rotate_ray_x(self, ray):
+    def rotate_ray_x(self, rays):
         """we only rotate our objectives not tube lenses!! this assumes that"""
-        # x = np.sin(ray.theta)*np.cos(ray.phi)
-        # y = np.sin(ray.theta)*np.sin(ray.phi)
-        # z = np.cos(ray.theta)
-        # k_vec_before = deepcopy(ray.k_vec)
-        # first make sure not under meridional translation
-        
-        # make all negative thetas into positive thetas with a phi + 180 rotation
-        # if ray.theta < 0:
-        #     ray.theta = np.abs(ray.theta)
-        #    ray.phi = (ray.phi + np.pi) % (2*np.pi)
 
-        if ray.isMeridional:
-            print("dot products of ray in merid", np.dot(ray.E_vec, ray.k_vec))
-            ray.E_vec = np.matmul(optical_matrices.meridional_transform(ray.phi, inverse=True), ray.E_vec)
-            ray.k_vec = np.matmul(optical_matrices.meridional_transform(ray.phi, inverse=True), ray.k_vec)
-            print("dot products of ray after inverse merid", np.dot(ray.E_vec, ray.k_vec))
+        if rays.isMeridional:
+            # print("dot products of ray in merid", np.sum(rays.I_vec * rays.k_vec, axis=1))
+            rays.meridional_transform(inverse=True)
 
-        ray.k_vec = np.matmul(optical_matrices.rotate_rays_x(self.xAxis_rotation), ray.k_vec)
-        ray.E_vec = np.matmul(optical_matrices.rotate_rays_x(self.xAxis_rotation), ray.E_vec)
-        # print(ray.k_vec - k_vec_before) 
-        # floating point values sometimes mean k_vec[2] > 1 e.g. 1 + 1e-10
-        printed_before = False
-        if abs(ray.theta) > 1e-6:
-            # print("theta before", ray.theta, flush=True)
-            printed_before = True
-        # ray.theta = np.arccos(ray.k_vec[2]/np.sqrt(ray.k_vec.dot(ray.k_vec)))
-        
-        if abs(ray.k_vec[2]) > 1:
-            ray.theta = 0
-            raise ValueError("Kz > 1")
-            print("warning: kz > 1")
-        else:
-            # ray.theta = np.arccos(ray.k_vec[2])
-            mag = (np.sum(ray.k_vec*ray.k_vec))**0.5
-            cos_theta = ray.k_vec[2]/mag
-            theta_before = deepcopy(ray.theta)
-            ray.theta = np.arccos(cos_theta)
-            print("mag", mag, "cos", cos_theta, "theta after rot", ray.theta, "theta before", theta_before)
-            # print("cos", cos_theta)
-        if printed_before:
-            pass # print("theta after rot", ray.theta, flush=True)
-        # atan = np.arctan(ray.k_vec[1]/ray.k_vec[0])  # phi
-        ray.phi = np.arctan2(ray.k_vec[1], ray.k_vec[0])
-        # atan_p_pi = np.logical_and(ray.k_vec[0] < 0, ray.k_vec[1] >= 0) 
-        # atan_m_pi = np.logical_and(ray.k_vec[0] < 0, ray.k_vec[1] < 0)
-        # pi_2 = np.logical_and(ray.k_vec[0] == 0, ray.k_vec[1] > 0)
-        # m_pi_2 = np.logical_and(ray.k_vec[0] == 0, ray.k_vec[1] < 0)
-        # phi0 = np.logical_and(ray.k_vec[0] == 0, ray.k_vec[1] == 0)
+        rays.k_vec = optical_matrices.rotate_rays_x(self.xAxis_rotation) @ rays.k_vec
+        rays.I_vec = optical_matrices.rotate_rays_x(self.xAxis_rotation) @ rays.I_vec
 
-        # if atan_p_pi:
-        #     ray.phi = atan + np.pi
-        # elif atan_m_pi:
-        #     ray.phi = atan - np.pi
-        # elif pi_2:
-        #     ray.phi = np.pi/2
-        # elif m_pi_2:
-        #     ray.phi = 2*np.pi-np.pi/2
-        # elif phi0:
-        #     print("ray phi print")
-        #     ray.phi = 0
-        # else:
-        #     ray.phi = atan
+        # floating point values sometimes mean k_vec[2] > 1 e.g. 1 + 1e-10        
+        kz_gt_1_mask = np.squeeze(rays.k_vec[:,2] > 1)
+        rays.theta[kz_gt_1_mask] = 0
+        rays.phi = np.arctan2(rays.k_vec[:,1], rays.k_vec[:,0])
 
-        # mod everything, idk
-        # ray.phi = (ray.phi + 2*np.pi) % (2*np.pi)
-
-        if np.isnan(ray.phi):
-            raise Exception("NaN in phi after ray rotation in objective")
-        if np.isnan(ray.theta):
-            raise Exception("NaN in theta after ray rotation in objective, k = ", ray.k_vec)
+        if np.isnan(rays.phi[np.invert(rays.escaped)]).any():
+            raise Exception("NaN(s) in phi after ray rotation in objective")
+        if np.isnan(rays.theta[np.invert(rays.escaped)]).any():
+            raise Exception("NaN(s) in theta after ray rotation in objective, k = ", rays.k_vec)
 
         # recompute rho
-        ray.rho = self.focal_length*np.sin(ray.theta)
-
-
+        rays.rho = self.focal_length*np.sin(rays.theta)
 
 class LinearPolariser():
     def __init__(self, psi, dz=0):
@@ -246,19 +201,14 @@ class LinearPolariser():
         self.psi = psi
         self.dz = dz
 
-    def apply_matrix(self, ray):
-        ray.update_history()
-        if ray.isMeridional:  # put back into non meridional basis
-            ray.E_vec = np.matmul(\
-                optical_matrices.meridional_transform(ray.phi, inverse=True),\
-                ray.E_vec)
-            ray.k_vec = np.matmul(\
-                optical_matrices.meridional_transform(ray.phi, inverse=True),\
-                ray.k_vec)
-            ray.isMeridional = False
-        ray.E_vec = np.matmul(optical_matrices.polariser(self.psi), ray.E_vec)
-        ray.k_vec = np.matmul(optical_matrices.polariser(self.psi), ray.E_vec)
-        return ray
+    def apply_matrix(self, rays):
+        rays.update_history()
+        if rays.isMeridional:  # put back into non meridional basis
+            rays.meridional_transform(inverse=True)
+        rays.I_vec = optical_matrices.polariser(self.psi) @ rays.I_vec
+        rays.k_vec = optical_matrices.polariser(self.psi) @ rays.k_vec
+        print("dot product after polariser", np.sum(rays.I_vec * rays.k_vec, axis=1))
+        return rays
 
 class WavePlate():
     def __init__(self, psi, delta):
@@ -266,18 +216,13 @@ class WavePlate():
         self.psi = psi  # angle of fast axis from x axis
         self.delta = delta  # amount of retardation e.g delta=pi/2 for qwp
 
-    def apply_matrix(self, ray):
-        ray.update_history()
-        if ray.isMeridional:  # put back into non meridional basis
-            ray.E_vec = np.matmul(\
-                optical_matrices.meridional_transform(ray.phi, inverse=True),\
-                ray.E_vec)
-            ray.k_vec = np.matmul(\
-                optical_matrices.meridional_transform(ray.phi, inverse=True),\
-                ray.k_vec)
-        ray.E_vec = np.matmul(optical_matrices.wave_plate(self.psi, self.delta), ray.E_vec)
-        ray.k_vec = np.matmul(optical_matrices.wave_plate(self.psi, self.delta), ray.k_vec)
-        return ray
+    def apply_matrix(self, rays):
+        rays.update_history()
+        if rays.isMeridional:  # put back into non meridional basis
+            rays.meridional_transform(inverse=True)
+        rays.I_vec = optical_matrices.wave_plate(self.psi, self.delta) @ rays.I_vec
+        rays.k_vec = optical_matrices.wave_plate(self.psi, self.delta) @ rays.k_vec
+        return rays
 
 class IdealFlatMirrorNoRotation():
     pass
@@ -296,6 +241,6 @@ class IdealFlatMirror():
         self.phi = 0
         ## TODO work out how to find intersection and angle between mirror normal and ray
         # maybe change coord system then back as soon as reflection is done?
-    def apply_matrix(self, ray):
-        ray.update_history()
+    def apply_matrix(self, rays):
+        rays.update_history()
 

@@ -51,6 +51,7 @@ def _rotate_field_curved_surface(E_vec, phi, theta):
 
 def _rotate_efield(E_vec, phi, theta_polar):
     """ 
+    Called by _rotate_field_curved_surface
     changes coordinate system according to k vector so that Ez = 0
     both rotates into meridional and then does theta rotation
     """
@@ -73,12 +74,6 @@ def get_final_polar_coords(ray, curved=True):
     else:
         r = ray.rho
     if ray.rho < 0:
-        # TEMPORARY COMMENT OUT
-        # phi = (ray.phi + np.pi) % (2*np.pi)
-        # phi = (phi + np.pi)
-        # go from negative radius to phi = phi + pi
-        ## we WOULD use modulo but it gets rid of 2pi, which we need because
-        ## interpolation doesn't wrap around from 2pi to 0.
         phi = phi + np.pi
         mask = (phi > 2*np.pi)*1
         phi = phi - mask*2*np.pi
@@ -88,15 +83,3 @@ def get_final_polar_coords(ray, curved=True):
     mask = (phi > 2*np.pi)*1  # use this instead of modulu seemed to work better?
     phi = phi - mask*2*np.pi
     return r, phi
-
-# def get_final_polar_coords(r, phi):
-#     """polar plot does not deal with negative radii, r=theta or rho"""
-#     if r < 0:
-#         # TEMPORARY COMMENT OUT
-#         phi = (phi + np.pi) % (2*np.pi)
-#         # phi = (phi + np.pi)
-#        # phi = phi + np.pi
-#         # mask = (phi > 2*np.pi)*1
-#         # phi = phi - mask*2*np.pi
-#         r = -r
-#     return r, phi
