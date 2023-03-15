@@ -1,0 +1,47 @@
+import numpy as np
+
+class Dipole():
+    def __init__(self, phi_d, alpha_d, lda_em=None, lda_exc=None) -> None:
+        """dipole class to simulate a dipole emitter
+        Note: everything is in radians, but the optical system is in degrees
+        Is this confusing?
+        Arguments:
+            phi_d <float> -- azimuthal angle, rotation about z axis [rad]
+                           clockwise when looking along positive z (into paper)
+            alpha_d <float> -- angle of dipole from x axis [rad].
+            lda_em <float> -- emission of fluorophore/dipole 
+                              (to be implemented) [nm]
+            lda_exc <float> -- excitaiton of fluorophore/dipole (used)
+                       for probability in photoselection? (to be implemented) [nm]
+        Methods:
+            get_rays(self, NA)
+        """
+        if lda_exc is None:
+            lda_exc = 500e-9  # should be a distribution at some point
+
+        self.alpha_d = alpha_d
+        self.phi_d = phi_d
+        self.lda_em = lda_em
+        self.lda_exc = lda_exc
+        self.density = 1  # scales quantity/density/fractional quanitity of dipole
+
+        self.rays = None
+
+        # get dipole angle
+        # angles given with theta measured from x not z so cos(theta) <-> sin(theta)
+        self.p_vec = [ np.cos(alpha_d)*np.cos(phi_d),\
+            np.cos(alpha_d)*np.sin(phi_d), \
+            np.sin(alpha_d)]
+
+    def get_initial_efield(self, rays):
+        # use _get_efield to calculate the E field based on a propagation vector
+        # and the dipole distribution
+        n_vec = rays.k_vec
+        r = rays.radius
+        n_x_p = np.cross(n_vec,self.p_vec)
+        k = 2*np.pi/self.lda_exc 
+ 
+        self.E_vec = np.cross(n_x_p, n_vec)
+        self.E_pre  = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
+
+        # self.E_vec = self.E_vec.astype(complex)
