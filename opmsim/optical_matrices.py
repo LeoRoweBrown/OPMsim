@@ -137,13 +137,22 @@ def rotate_rays_y(angle):
     ])
     return rot_mat_y
 
-def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_metal_data, wavelength=500e-9, wl_mul=1e9):
-    wavelength *= wl_mul
-    n_film_wl = n_film_data[:,0]
+def reflection_cartesian_matrix(N):
+    # householder transformation, may need to replace - with +
+    reflect_matrix = [
+        [1-2*N[0]**2, -2*N[0]*N[1], -2*N[0]*N[2]],
+        [-2*N[0]*N[1], 1-2*N[1]**2, -2*N[1]*N[2]],
+        [-2*N[0]*N[2], -2*N[1]*N[2], 1-2*N[2]**2]
+    ]
+    return reflect_matrix
+
+def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_metal_data, wavelength=500e-9):
+    wl_mul=1e9
+    n_film_wl = n_film_data[:,0]/wl_mul
     n_film = n_film_data[:,1]
     k_film = n_film_data[:,2]
 
-    n_metal_wl = n_metal_data[:,0]
+    n_metal_wl = n_metal_data[:,0]/wl_mul
     n_metal = n_metal_data[:,1]
     k_metal = n_metal_data[:,2]
 
@@ -153,19 +162,25 @@ def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_meta
     n_metal_interp = scipy.interpolate.interp1d(n_metal_wl, n_metal)
     k_metal_interp = scipy.interpolate.interp1d(n_metal_wl, k_metal)
 
+    # print("theta_i")
+
     if hasattr(wavelength, "__len__"):
         if len(wavelength == 1):
             wavelength = np.ones(len(theta_i))*wavelength
 
-    n_film_complex = n_film_interp(wavelength) - k_film_interp(wavelength)
-    n_metal_complex = n_metal_interp(wavelength) - k_metal_interp(wavelength)
+    n_film_complex = n_film_interp(wavelength) - 1j*k_film_interp(wavelength)
+    n_metal_complex = n_metal_interp(wavelength) - 1j*k_metal_interp(wavelength)
     
     r_p, r_s = compute_fresnel_protected_mirror(theta_i, n_film_complex, film_thickness, n_metal_complex, wavelength)
+    # print("r_p", r_p)
+    # print("r_s", r_s)
+    # print(r_p.shape)
+    # print(r_s.shape)
     
     fresnel_matrix = np.zeros([np.size(r_p), 3, 3], dtype=np.complex64)
 
     for n in range(np.size(r_p)):
-        print(r_p[n])
+        # print(r_p[n])
         fresnel_matrix[n, :, :] = np.array([
         [r_p[n], 0, 0],
         [0, r_s[n], 0],
@@ -184,13 +199,17 @@ def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal, wavelength):
     n2 = n_film
     n3 = n_metal
 
+    print("n1", n1)
+    print("n2", n2)
+    print("n3", n3)
+
     theta_t2 = np.arcsin((n1/n2)*np.sin(theta_1))
 
     r_1s = (n1*np.cos(theta_1) - n2*np.cos(theta_t2))/\
         (n1*np.cos(theta_1) + n2*np.cos(theta_t2))
 
     r_1p = (n2*np.cos(theta_1) - n1*np.cos(theta_t2))/\
-        (n2*np.cos(theta_1) + n1*np.cos(theta_t2));
+        (n2*np.cos(theta_1) + n1*np.cos(theta_t2))
 
     t_1s = 2*n1*np.cos(theta_1)/(n1*np.cos(theta_1) + n2*np.cos(theta_t2));
     t_1p = 2*n1*np.cos(theta_1)/(n2*np.cos(theta_1) + n1*np.cos(theta_t2));
@@ -246,3 +265,4 @@ def refraction_meridional_tensor(theta_array):
         refract_tensor[n, :, :] = refraction_meridional(
             theta_array[n].squeeze())
     return refract_tensor
+

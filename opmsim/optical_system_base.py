@@ -29,7 +29,9 @@ class OpticalSystem():
             'vector_plot': range(len(elements)),  # plot vectors at every element
             'show_input_rays': False,
             'calculate_entrace_pupil': True,
-            'entrace_pupil_flat': False  # for tracing to first surface, to show field on O1
+            'entrace_pupil_flat': False,  # for tracing to first surface, to show field on O1
+            'draw_rays': False,
+            'max_rays_stored': 200
         }
         for key in options:
             self.options[key] = options[key]
@@ -45,10 +47,15 @@ class OpticalSystem():
         O1 = elements[0]
         if O1.type != 'SineLens':
             raise TypeError("First element must be a sine lens!")
+        if self.options['draw_rays']:
+            for n in range(len(elements)):
+                elements[n].update_history = True
+
 
         source.get_rays_uniform_rings(O1.sine_theta, O1.focal_length, self.options['ray_count'])
         if self.options['show_input_rays']:
             source.display_pupil_rays()
+        source.rays.num_rays_saved = self.options['max_rays_stored']
 
         init_time = time.time() - init_start
         print("initialisation time in system %fs" % init_time)
@@ -59,6 +66,8 @@ class OpticalSystem():
             self.elements, self.source, self.options)
         trace_time = time.time() - trace_start
         print("time in trace_rays %fs" % trace_time)
+        if self.options['draw_rays']:
+            self.draw_rays()
 
     def _plot_pupil(self, plot_options={}, initial_pupil=False):
         default_plot_title = \
@@ -70,7 +79,8 @@ class OpticalSystem():
         self.plot_options = {
             'title': default_plot_title,
             'caption': True,
-            'add_sim_details': True
+            'add_sim_details': True,
+            'max_r_in': None
         }
         for key in plot_options:
             self.plot_options[key] = plot_options[key]
@@ -92,3 +102,17 @@ class OpticalSystem():
 
     def plot_initial_pupil(self, plot_options_initial={}):
         self._plot_pupil(plot_options_initial, initial_pupil=True)
+
+    def draw_rays(self, dipole=0, ray='all'):
+        # option for sum of dipoles as I field?
+        if ray == 'all':
+            ray_mask = np.round(np.linspace(0, self.detector.n_rays, self.options['max_rays_stored']))
+        elif hasattr(ray, "__len__"):
+            ray_mask = ray
+        elif isinstance(ray, int):
+            ray_mask = ray
+        else:
+            raise ValueError("Invalid input for ray, supply array of ray indices, a single index or 'all'")
+        ray_mask = np.array(set(ray_mask)) # remove duplicates
+
+        pass

@@ -65,6 +65,14 @@ class Detector():
 
         self.ray_phi = np.asarray(self.ray_phi, dtype=np.float64)
 
+        # plot radii to debug
+        fig = plt.figure()
+        plt.plot(self.ray_polar_radius)
+        plt.title("ray radii on polar plot")
+        plt.xlabel("ray number in list")
+        plt.ylabel("radius")
+        plt.show()
+
         phi_1d = self.ray_phi.squeeze()
         self.unstructured_x = self.ray_polar_radius*np.cos(phi_1d)
         self.unstructured_y = self.ray_polar_radius*np.sin(phi_1d)
@@ -97,7 +105,7 @@ class Detector():
         self.I_total_integral = self.Ix_integral + self.Iy_integral
 
     def plot_pupil(self, title="", show_prints=False, plot_arrow=None,
-            fill_zeroes=False, scale_range=None, rotate_90=False, caption=True):
+            fill_zeroes=False, scale_range=None, rotate_90=False, caption=True, max_r_in=None):
         print("ray count", self.rays.n_final)
         if self.rays.n_final < 4:
             print("not enough points to plot pupil, skipping")
@@ -106,11 +114,13 @@ class Detector():
             caption_text = r'$Ix/Iy = %f$, $RCE = %f$' % (self.Iy_Ix_ratio, self.energy_ratio)
         else:
             caption_text = None
+        if max_r_in is None:
+            max_r_in = self.max_r
         pupil = graphics.PupilPlotObject(
             self.unstructured_x, self.unstructured_y,
             self.Ix_area_scaled, self.Iy_area_scaled)
         pupil.plot(title, show_prints, plot_arrow,
-            fill_zeroes, scale_range, rotate_90, caption_text, self.max_r)
+            fill_zeroes, scale_range, rotate_90, caption_text, max_r_in)
         # self.pupil = pupil
         return pupil
 

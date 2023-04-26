@@ -3,11 +3,11 @@ import scipy
 import numpy as np
 
 def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_metal_data, wavelength):
-    n_film_wl = n_film_data[:,0]
+    n_film_wl = n_film_data[:,0]/1e9
     n_film = n_film_data[:,1]
     k_film = n_film_data[:,2]
 
-    n_metal_wl = n_metal_data[:,0]
+    n_metal_wl = n_metal_data[:,0]/1e9
     n_metal = n_metal_data[:,1]
     k_metal = n_metal_data[:,2]
 
@@ -27,7 +27,7 @@ def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_meta
     print("n_metal_complex", n_metal_complex)
     print("n_film_complex", n_film_complex)
 
-    r_s, r_p = compute_fresnel_protected_mirror(theta_i, n_film_complex, film_thickness, n_metal_complex)
+    r_s, r_p = compute_fresnel_protected_mirror(theta_i, n_film_complex, film_thickness, n_metal_complex, wavelength)
 
     print("r_s", r_s)
     print("r_p", r_p)
@@ -35,8 +35,9 @@ def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_meta
     print("Rp", np.real(r_p*np.conj(r_p)))
     print("Rs", np.real(r_s*np.conj(r_s)))
 
+    return r_s, r_p
     
-def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal):
+def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal, wavelength):
     if hasattr(n_film, "__len__"):
         n_points = len(n_film)
     else:
@@ -44,6 +45,11 @@ def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal):
     n1 = np.ones(n_points)
     n2 = n_film
     n3 = n_metal
+
+    print("theta_1", theta_1)
+    print("n2", n2)
+    print("n3", n3)
+    print("wavelength", wavelength)
 
     theta_t2 = np.arcsin((n1/n2)*np.sin(theta_1))
 
@@ -95,10 +101,27 @@ def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal):
 
 n_film_data = np.genfromtxt('refractive_index_data/SiO2.txt', delimiter='\t')
 n_film_data = n_film_data[1:,:]  # remove headers
-film_thickness = 158e-6
+film_thickness = 158e-9
 n_metal_data = np.genfromtxt('refractive_index_data/Ag.txt', delimiter='\t')
+n_metal_data = n_metal_data[1:,:]
 
-theta_i = np.arange(0,np.pi/3, np.pi/20)
+theta_i = np.linspace(0, np.pi/2, 100)#np.arange(0,np.pi/3, np.pi/20)
 wavelength= 500e-9
 
-protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_metal_data, wavelength*1e9)
+r_s, r_p = protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness, n_metal_data, wavelength)
+
+theta_i = np.linspace(0, np.pi/2, 100)
+n_air = 1
+n_glass = 1.5
+
+#r_s, r_p = compute_fresnel_protected_mirror(theta_i, n_glass, 1e-3, n_air, wavelength)
+Rp = np.real(r_p*np.conj(r_p))
+Rs = np.real(r_s*np.conj(r_s))
+#print("Rp", np.real(r_p*np.conj(r_p)))
+#print("Rs", np.real(r_s*np.conj(r_s)))
+
+from matplotlib import pyplot as plt
+plt.figure()
+plt.plot(Rp)
+plt.plot(Rs)
+plt.show()

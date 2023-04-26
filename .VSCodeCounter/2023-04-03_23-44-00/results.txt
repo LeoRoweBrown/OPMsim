@@ -1,0 +1,68 @@
+Date : 2023-04-03 23:44:00
+Directory : c:\Users\lnr19\code\OPMsim
+Total : 35 files,  58813 codes, 1242 comments, 816 blanks, all 60871 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| JSON     |          6 |     56,112 |        363 |          5 |     56,480 |
+| Python   |         27 |      2,687 |        879 |        809 |      4,375 |
+| YAML     |          1 |         12 |          0 |          1 |         13 |
+| Markdown |          1 |          2 |          0 |          1 |          3 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                      | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                         |         35 |     58,813 |      1,242 |        816 |     60,871 |
+| . (Files)                                                                 |          3 |         14 |          0 |          3 |         17 |
+| legacy_code                                                               |          8 |        744 |        251 |        259 |      1,254 |
+| notebooks                                                                 |          6 |     56,112 |        363 |          5 |     56,480 |
+| opmsim                                                                    |         18 |      1,943 |        628 |        549 |      3,120 |
+| opmsim (Files)                                                            |         15 |      1,794 |        607 |        508 |      2,909 |
+| opmsim\tools                                                              |          3 |        149 |         21 |         41 |        211 |
++---------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                  | language | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| c:\Users\lnr19\code\OPMsim\README.md                                      | Markdown |          2 |          0 |          1 |          3 |
+| c:\Users\lnr19\code\OPMsim\environment.yml                                | YAML     |         12 |          0 |          1 |         13 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\dipole.py                          | Python   |         21 |         19 |          7 |         47 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\dipoles.py                         | Python   |         25 |         20 |         10 |         55 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\graphics_old.py                    | Python   |        188 |         83 |         55 |        326 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\mirror_rot_test.py                 | Python   |         69 |          5 |         30 |        104 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\optical_system.py                  | Python   |         60 |         25 |         20 |        105 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\optical_system_complex.py          | Python   |         60 |         25 |         20 |        105 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\prototype_mirror_transform.py      | Python   |        147 |         34 |         60 |        241 |
+| c:\Users\lnr19\code\OPMsim\legacy_code\prototype_mirror_transform_func.py | Python   |        174 |         40 |         57 |        271 |
+| c:\Users\lnr19\code\OPMsim\notebooks\.~simulate_opm.ipynb                 | JSON     |      5,327 |          0 |          1 |      5,328 |
+| c:\Users\lnr19\code\OPMsim\notebooks\dopm_notebook.ipynb                  | JSON     |     32,852 |        363 |          1 |     33,216 |
+| c:\Users\lnr19\code\OPMsim\notebooks\opm_notebook.ipynb                   | JSON     |        724 |          0 |          1 |        725 |
+| c:\Users\lnr19\code\OPMsim\notebooks\opm_run.ipynb                        | JSON     |          0 |          0 |          1 |          1 |
+| c:\Users\lnr19\code\OPMsim\notebooks\simulate_opm.ipynb                   | JSON     |      5,113 |          0 |          0 |      5,113 |
+| c:\Users\lnr19\code\OPMsim\notebooks\simulate_opm_backup.ipynb            | JSON     |     12,096 |          0 |          1 |     12,097 |
+| c:\Users\lnr19\code\OPMsim\opmsim\__init__.py                             | Python   |          0 |          0 |          1 |          1 |
+| c:\Users\lnr19\code\OPMsim\opmsim\anisotropy.py                           | Python   |         45 |          6 |         13 |         64 |
+| c:\Users\lnr19\code\OPMsim\opmsim\detector.py                             | Python   |         98 |         29 |         19 |        146 |
+| c:\Users\lnr19\code\OPMsim\opmsim\dipole_source.py                        | Python   |        204 |        143 |         56 |        403 |
+| c:\Users\lnr19\code\OPMsim\opmsim\distribution_functions.py               | Python   |        129 |         24 |         31 |        184 |
+| c:\Users\lnr19\code\OPMsim\opmsim\optical_elements.py                     | Python   |        511 |        276 |        197 |        984 |
+| c:\Users\lnr19\code\OPMsim\opmsim\optical_matrices.py                     | Python   |        197 |         16 |         46 |        259 |
+| c:\Users\lnr19\code\OPMsim\opmsim\optical_system_base.py                  | Python   |         86 |         13 |         18 |        117 |
+| c:\Users\lnr19\code\OPMsim\opmsim\optical_systems.py                      | Python   |        150 |         25 |         48 |        223 |
+| c:\Users\lnr19\code\OPMsim\opmsim\ray.py                                  | Python   |         46 |         16 |          6 |         68 |
+| c:\Users\lnr19\code\OPMsim\opmsim\ray_diagram.py                          | Python   |          5 |          0 |          1 |          6 |
+| c:\Users\lnr19\code\OPMsim\opmsim\rays.py                                 | Python   |        203 |         34 |         34 |        271 |
+| c:\Users\lnr19\code\OPMsim\opmsim\run_opm.py                              | Python   |         21 |         10 |         12 |         43 |
+| c:\Users\lnr19\code\OPMsim\opmsim\test_imports.py                         | Python   |          1 |          0 |          1 |          2 |
+| c:\Users\lnr19\code\OPMsim\opmsim\tools\graphics.py                       | Python   |        138 |         19 |         35 |        192 |
+| c:\Users\lnr19\code\OPMsim\opmsim\tools\io_functions.py                   | Python   |          8 |          0 |          5 |         13 |
+| c:\Users\lnr19\code\OPMsim\opmsim\tools\misc.py                           | Python   |          3 |          2 |          1 |          6 |
+| c:\Users\lnr19\code\OPMsim\opmsim\trace_system.py                         | Python   |         98 |         15 |         25 |        138 |
+| c:\Users\lnr19\code\OPMsim\prototype_mirror_with_source.py                | Python   |          0 |          0 |          1 |          1 |
+| Total                                                                     |          |     58,813 |      1,242 |        816 |     60,871 |
++---------------------------------------------------------------------------+----------+------------+------------+------------+------------+

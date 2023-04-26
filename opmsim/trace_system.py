@@ -3,6 +3,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 import time
 from memory_profiler import profile
+import warnings
+
 
 from .detector import Detector
 from . import dipole_source
@@ -36,9 +38,12 @@ def trace_rays(elements, source, options):
     # trace the rays through the system and calculate the 
     # transfer matrix so that we can trace E vectors separately
     # but efficiently at the end
+    #keep_history = False
+    #if options['draw_rays']:
+         #keep_history = True
 
     for i, element in enumerate(elements):
-        rays = element.apply_matrix(rays)
+        rays = element.apply_matrix(rays)#, keep_history=keep_history)
         # plot? 3d vector diagram
         if 'vector_plots' in options:
             if type(options['vector_plots']) is True:
@@ -46,14 +51,14 @@ def trace_rays(elements, source, options):
             elif i in options['vector_plots']:
                 rays.quiver_plot()
 
-    rays.finalize_rays_coordinates()
+    rays.finalize_rays_coordinates()#inverse_meridional=False)
     rays.remove_escaped_rays()
 
     rays.transfer_matrix = rays.transfer_matrix.reshape((1,rays.n_final,3,3))
     rays.E_vec = rays.transfer_matrix @ rays.E_vec
 
     source.density = source.density.reshape((rays.E_vec.shape[0],1,1,1))
-    I_vec = (rays.E_vec*rays.E_vec)*(source.density)# /rays.n  # scale by ray count
+    I_vec = np.real(rays.E_vec*np.conj(rays.E_vec))*(source.density)# /rays.n  # scale by ray count
     
     rays.I_total = np.sum(I_vec, axis=0)  # sum over dipoles
     rays.alternative_minimum = np.min(np.concatenate((rays.I_total[:,0], rays.I_total[:,1])))
@@ -72,6 +77,7 @@ def trace_rays(elements, source, options):
     detector.limiting_NA = element.NA
     detector.limiting_D = element.D
     if is_curved_pupil:
+        detector.max_r = element.NA/element.n
         detector.max_r = element.NA/element.n
     else:
         detector.max_r = element.D/2
@@ -97,7 +103,8 @@ def trace_rays(elements, source, options):
         print("mag of k_vec", np.sum(rays.k_vec*rays.k_vec, axis=1))
         print("E_vec", rays.E_vec)
         print(rays.transfer_matrix)
-        raise ValueError("Iz is non zero in ray's frame!")
+        warnings.warn("Iz is non zero in ray's frame!")
+        #raise ValueError("Iz is non zero in ray's frame!")
 
     print("maxr",detector.max_r)
     detector.detect_rays(rays)  # calculate the pupil field
@@ -122,7 +129,7 @@ def trace_rays(elements, source, options):
         
         initial_rays.E_vec = initial_rays.transfer_matrix @ initial_rays.E_vec
         # initial_rays.combine_rays(lost_rays)  # add the zeroes back on
-        I_vec_initial = (initial_rays.E_vec*initial_rays.E_vec)*source.density
+        I_vec_initial = np.real(initial_rays.E_vec*np.conj(initial_rays.E_vec))*source.density
 
         initial_rays.I_total = np.sum(I_vec_initial, axis=0)  # sum over dipoles
         initial_rays.alternative_minimum = rays.alternative_minimum

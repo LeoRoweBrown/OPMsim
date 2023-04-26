@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 class PolarRays:
     def __init__(self,
                 phi_array, theta_array, radius,
-                area_array, lda=500e-9, keep_history=True):
+                area_array, lda=500e-9, keep_history=True, num_rays_saved=None):
         """
         Arguments:
         lda <float> -- wavelength of ray
@@ -33,8 +33,9 @@ class PolarRays:
         self.theta_in = theta_array  # NOT UPDATED
         self.theta = theta_array
         self.rho = np.zeros_like(phi_array)
+        self.rho_before_trace = None
         self.radius = radius
-
+        self.optical_axis = 0
         self.isMeridional = False
         self.escaped = [False]*self.n
         self.areas = area_array
@@ -42,14 +43,31 @@ class PolarRays:
         self.transfer_matrix = np.tile(np.identity(3), (1,self.n,1,1))
         # self.transfer_matrix = self.transfer_matrix.reshape(1,self.n,3,3)
         self.alternative_minimum = None  # used when E-values are set to 0 manually
+        self.negative_kz = False
 
-        self.keep_history = keep_history
+        self.keep_history = keep_history  # actually overrided by apply_matrix which decides this..
+        self.num_rays_saved = num_rays_saved
+
         self.ray_history = []
+
+        if self.num_rays_saved is None:
+            self.ray_history_mask = np.arange(0,self.k_vec.shape[0])
+        else:
+            self.ray_history_mask = np.round(np.linspace(0, self.k_vec.shape[0]-1, self.num_rays_saved))
+            self.ray_history_mask = np.array(set(self.ray_history_mask))  # remove duplicates
 
     def update_history(self, note=None):
         self.note = note
         if self.keep_history:
-            self.ray_history.append(copy.deepcopy(self))
+            copy_to_save = copy.deepcopy(self)
+            # TODO: please rename remove_escaped_rays now that it's being used polymorphically
+            copy_to_save.remove_escaped_rays(self.ray_history_mask)
+            copy_to_save.ray_history = []  # don't want multiple copies of ray history
+            self.ray_history.append(copy_to_save)
+            print("Saved checkpoint with", self.num_rays_saved, "rays")
+        else:
+            # no reason to really have this option
+            print("History has been disabled, rays not saved!")
 
     def rotate_rays_local_basis(self, inverse_basis=False, inverse_meridional=True):
         """
@@ -60,11 +78,28 @@ class PolarRays:
         # print("basis rotate transfer matrix before", self.transfer_matrix)
         # we want to start from non meridional basis, unless we are doing
         # inverse basis transform (inverse basis tf undoes meridional)
+        reverse_phi = False
+        theta = self.theta
         if self.isMeridional and not inverse_basis:
             print("Inverting meridional")
             self.meridional_transform(inverse=True)
+        # method 1:
+        if self.negative_kz:
+            print("kz are negative!")
+            reverse_phi = True
+            #theta = np.pi-self.theta
+        else:
+            pass
+            #theta = self.theta
+        # method 2:
+        # theta = self.theta % (np.pi/2)
+        plt.figure()
+        plt.plot(theta)
+        plt.title("theta before local basis")
+        plt.show()
+
         basis_tensor = optical_matrices.rotate_basis_tensor(
-            self.phi, self.theta, inverse_basis)
+            self.phi, theta, inverse_basis)
         # thinking about removing k_vec tf, but it's undone in merid so has to stay..
         self.k_vec = basis_tensor @ self.k_vec  
         self.transfer_matrix = basis_tensor @ self.transfer_matrix
@@ -72,26 +107,30 @@ class PolarRays:
 
         self.isMeridional = True # basis rotation automatically does meridional tf
         if inverse_meridional:
-            self.meridional_transform(inverse=True)  # recover global Ex and Ey
+            self.meridional_transform(inverse=True, reverse_phi=reverse_phi)  # recover global Ex and Ey
 
 
-    def meridional_transform(self, inverse=False):
+    def meridional_transform(self, inverse=False, reverse_phi=False):
         if self.isMeridional != inverse:
             raise Exception("Cannot apply meridional transform twice in same direction")
+        phi = self.phi
+        if reverse_phi:
+            phi = -self.phi
+                
         merid_tensor = optical_matrices.meridional_transform_tensor(
-            self.phi, inverse)
+            phi, inverse)
         self.k_vec = merid_tensor @ self.k_vec
         self.isMeridional = not inverse
         self.transfer_matrix = merid_tensor @ self.transfer_matrix
 
-    def finalize_rays_coordinates(self):
+    def finalize_rays_coordinates(self,inverse_meridional=True):
 
         if self.isMeridional:  # put back into non meridional basis
             self.meridional_transform(inverse=True)
 
         self.update_history()  # save rays before
         # print("before rotate", rays.I_vec)
-        self.rotate_rays_local_basis()
+        self.rotate_rays_local_basis(inverse_meridional=inverse_meridional)
     
     def remove_escaped_rays(self, escaped=None):
         """is there a more efficient way of doing this?"""

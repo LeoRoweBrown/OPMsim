@@ -53,7 +53,7 @@ E_in = np.array([1,1,1])
 print("dot of E and u", np.dot(E_in, u_in))
 
 # normal vector, nominally (0,0,-1)
-normal_angle = 20*np.pi/180
+normal_angle = 5*np.pi/180
 Nz = -1
 Nx = (Nz)*np.tan(normal_angle)
 N = np.array([Nx,0,Nz])
@@ -134,11 +134,11 @@ uxN_unit = uxN/np.linalg.norm(uxN)
 Mr = rot_axis_matrix(uxN_unit, sin_mr, cos_mr, False)
 
 Mf = fresnel_matrix(theta_i)
+Mf = np.identity(3)
 # fresnel coefficients applied
 E_ps = np.matmul(Mf, E_ps)
-
 u_ps_r2 = u_ps - 2*(np.dot(N_ps, u_ps))*N_ps
-# E_ps_r = E_ps - 2*(np.dot(N_ps, E_ps))*N_ps
+E_ps_r2 = E_ps - 2*(np.dot(N_ps, E_ps))*N_ps
 
 u_ps_r = np.matmul(Mr, u_ps)
 E_ps_r = np.matmul(Mr, E_ps)
@@ -154,10 +154,18 @@ E_r = np.matmul(M1M2_inv, E_ps_r)
 u_r = np.matmul(M1M2_inv, u_ps_r)
 u_r2 = np.matmul(M1M2_inv, u_ps_r2)
 
+
+E_r_unfold = [E_r[0], E_r[1], -E_r[2]]
+u_r_unfold = [u_r[0], u_r[1], -u_r[2]]
+
+
+print("reflected dot 2", np.dot(u_r, E_r))
+
+
 ## now reflect the ray without transformations to compare ##
 
 # u_in_r = u_in - 2*(np.dot(N, u_in))*N
-# E_in_r = E_in - 2*(np.dot(N, E_in))*N
+E_in_r2 = E_in - 2*(np.dot(N, E_in))*N
 
 # ray cross N for rotation
 uxN_in = np.cross(u_in, N)
@@ -177,6 +185,8 @@ print("----- E-field -----")
 print("E_in", E_in)
 print("E_in_r", E_in_r)
 print("E_r", E_r)
+print("E_ps_r2", E_ps_r2)
+print("E_in_r2", E_in_r2)
 
 print("----- k-field -----")
 print("u_in_r", u_in_r)
@@ -187,7 +197,9 @@ print("u_r2", u_r2)
 len_ray = 1
 p0 = np.array([0,0,0])
 p1 = p0 + u_in*len_ray
-p2 = p1 + u_in_r*len_ray
+p2 = p1 + u_r*len_ray
+
+p2_unfold = p1 + u_r_unfold*len_ray
 
 print("dist1", np.linalg.norm(u_in*len_ray))
 print("dist2", np.linalg.norm(p2-p1))
@@ -198,9 +210,17 @@ x_q = [p0[0], p1[0], p2[0]]
 y_q = [p0[1], p1[1], p2[1]]
 z_q = [p0[2], p1[2], p2[2]]
 
+x_q_unfold = [p1[0], p2_unfold[0]]
+y_q_unfold = [p1[1], p2_unfold[1]]
+z_q_unfold = [p1[2], p2_unfold[2]]
+
 x_E = [E_in[0], 0, E_r[0]]
 y_E = [E_in[1], 0, E_r[1]]
 z_E = [E_in[2], 0, E_r[2]]
+
+x_E_unfold = [0, E_r_unfold[0]]
+y_E_unfold = [0, E_r_unfold[1]]
+z_E_unfold = [0, E_r_unfold[2]]
 
 # x_E = [E_in[0], 0, E_in_r[0]]
 # y_E = [E_in[1], 0, E_in_r[1]]
@@ -210,6 +230,12 @@ z_E = [E_in[2], 0, E_r[2]]
 ax.quiver(x_q, y_q, z_q, x_E, y_E, z_E, length=0.05, normalize=True)
 ax.quiver(x_q[1], y_q[1], z_q[1], N[0], N[1], N[2], length=0.2, normalize=True)
 ax.plot(x_q, y_q, z_q)
+
+ax.quiver(x_q_unfold, y_q_unfold, z_q_unfold, x_E_unfold, y_E_unfold, z_E_unfold, length=0.05, normalize=True)
+ax.plot(x_q_unfold, y_q_unfold, z_q_unfold)
 ax.axis('equal') 
+
+print(z_q)
+print(z_q_unfold)
 
 plt.show()
