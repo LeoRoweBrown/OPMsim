@@ -311,6 +311,20 @@ class LinearPolariser():
         # rays.k_vec = optical_matrices.polariser(self.psi) @ rays.k_vec
         rays.transfer_matrix = optical_matrices.polariser(self.psi) @ rays.transfer_matrix
         return rays
+    
+class DiagonalMatrix():
+    def __init__(self, value, update_history=False):
+        self.type = 'DiagonalMatrix'
+        self.value = value  # 
+        self.update_history = update_history
+
+    def apply_matrix(self, rays, update_history=False):
+        if self.update_history: rays.update_history()
+        if rays.isMeridional:  # put back into non meridional basis
+            rays.meridional_transform(inverse=True)
+        rays.transfer_matrix = \
+            optical_matrices.diagonal(self.value) @ rays.transfer_matrix
+        return rays
 
 class WavePlate():
     def __init__(self, psi, delta, update_history=False):
@@ -324,8 +338,66 @@ class WavePlate():
         if rays.isMeridional:  # put back into non meridional basis
             rays.meridional_transform(inverse=True)
         # rays.k_vec = optical_matrices.wave_plate(self.psi, self.delta) @ rays.k_vec
+        # E_before = rays.transfer_matrix @ rays.E_vec
+        #rays_, E_vec_ = 
+        print("----------------------Electric field before waveplate------------------")
+        rays.quiver_plot(downsampling=1, n_rays = None)
         rays.transfer_matrix = \
             optical_matrices.wave_plate(self.psi, self.delta) @ rays.transfer_matrix
+        print("----------------------Electric field after waveplate------------------")
+        rays.quiver_plot(downsampling=1, n_rays = None)    
+
+        x0_all = rays.rho*np.cos(rays.phi)
+        y0_all = rays.rho*np.sin(rays.phi)
+        x0 = x0_all[np.invert(rays.escaped)]
+        y0 =y0_all[np.invert(rays.escaped)]
+        E_vec = rays.transfer_matrix @ rays.E_vec
+        # print("E tf resid", (E_vec - E_tf))
+        #E_vec = E_vec[:,:,:,0]
+        E_vec_all = E_vec.reshape((E_vec.shape[0], E_vec.shape[1], 3))
+        E_vec = E_vec_all[:,np.invert(rays.escaped),:]
+        # print("not escaped", np.invert(rays.escaped))
+        print("all shape", E_vec_all.shape)
+        print("shape", E_vec.shape)
+        # plt.figure()
+        # plt.scatter(E_vec[:, :, 0].real, E_vec[:, :, 1].real)
+        # plt.title("scatter for E real component (in waveplate)")
+        # plt.show()
+        # plt.figure()
+        # plt.scatter(E_vec[:, :, 0].imag, E_vec[:, :, 1].imag)
+        # plt.title("scatter for E imag component (in waveplate)")
+        # plt.show()
+        # plt.figure()
+        # plt.scatter(E_vec[:, :, 0]*np.conj(E_vec[:, :, 0]), E_vec[:, :, 1]*np.conj(E_vec[:, :, 1]))
+        # plt.title("scatter for E modulus component (in waveplate)")
+        # plt.show()
+
+        #plt.figure
+        #plt.scatter(np.real(E_vec[0,:,0,0]),np.real(E_vec[0,:,1,0]))
+        #plt.show()
+        #plt.figure
+        #plt.scatter(np.imag(E_vec[0,:,0,0]),np.imag(E_vec[0,:,1,0]))
+        #plt.show()
+        ################################################################
+        # plot triangulated heatmap (initial field) without using phi and stuff for debugging
+        # fig = plt.figure(figsize=[10,3])
+        # ax = fig.add_subplot(131)
+        # E_width = 0.005
+        # width = 0.005
+        # ax.scatter(x0,y0)
+        # ax.quiver(x0,y0, E_vec[:, :, 0].real, E_vec[:, :, 1].real, color='g', width=E_width, scale=10)
+        # ax.quiver(x0,y0, E_vec[:, :, 0].imag, E_vec[:, :, 1].imag, color='purple', width=E_width, scale=10)
+        # ax.set_aspect('equal')
+        # plt.title("waveplate quiver")
+        # plt.show()
+
+        data_x =  np.real(E_vec[0,:,0]*np.conj(E_vec[0,:,0]))
+        data_y =  np.real(E_vec[0,:,1]*np.conj(E_vec[0,:,1]))
+        # plt.figure
+        # plt.scatter(data_x,data_y)
+        # plt.show()
+        graphics.heatmap_plot(x0, y0, data_x, data_y, title="Intensity field after QWP")
+
         return rays
 
 class IdealFlatMirrorNoRotation():
@@ -339,9 +411,11 @@ class FlatMirror():
         n_film_file='../refractive_index_data/SiO.txt', 
         n_metal_file='../refractive_index_data/Ag.txt', 
         retardance=True, perfect_mirror=False, update_history=False,
-        fresnel_debug_savedir = None):
+        fresnel_debug_savedir = None,
+        reflectance=1):
 
         self.type = 'FlatMirror'
+        self.mirror_type = 'perfect'  # e.g. fresnel, protected
         self.rot_y = rot_y  # rotation in y 
         self.n_film_file = n_film_file
         self.n_film_data = np.genfromtxt(self.n_film_file, delimiter='\t')
@@ -351,6 +425,7 @@ class FlatMirror():
         self.n_metal_data = np.genfromtxt(self.n_metal_file, delimiter='\t')
         self.n_metal_data = self.n_metal_data[1:,:]
         self.perfect_mirror = perfect_mirror
+        self.reflectance = reflectance
         self.retardance = retardance  # if false, absolute value of rs and rp used
         # self.delta_x = 0  # rotation in x
         self.fresnel_debug_savedir = fresnel_debug_savedir
@@ -414,6 +489,9 @@ class FlatMirror():
         fig.suptitle(title)
 
     def apply_matrix(self, rays):
+        print("----------------------Electric field before reflection------------------")
+
+        rays.quiver_plot(downsampling=1, n_rays = None)
         ##
         # rotate out of meridional plane
         if rays.isMeridional:  # put back into non meridional basis
@@ -421,31 +499,26 @@ class FlatMirror():
         
         if self.update_history: rays.update_history()
 
+        initial_phi = rays.phi
+
         # starting field
         initial_E_vec_4d = (rays.transfer_matrix @ rays.E_vec)#.squeeze()
-        # print(initial_E_vec.shape)
         initial_E_vec = initial_E_vec_4d[0,:,:,0]
-        # print(initial_E_vec.shape)
-
-        # initial_E_vec = np.sum(initial_E_vec, axis=0)
         
         rho_0 = rays.rho_before_trace
-        z_dist = abs(rho_0/np.tan(rays.theta))
-        dist_r = abs(z_dist/np.cos(rays.theta))
-        dist_r = abs(rho_0/np.sin(rays.theta))
+        dist_r = abs(rho_0/np.sin(rays.theta))  # distance for plotting
         # all r are the same, use for theta =0
-        z_dist[rays.theta < 1e-6] = dist_r[-1]
         dist_r[rays.theta < 1e-6] = dist_r[-1]
+
+        ################################################################
+        # plot triangulated heatmap (initial field) without using phi and stuff for debugging
         
         x0 = rho_0*np.cos(rays.phi)
         y0 = rho_0*np.sin(rays.phi)
         z0 = abs(dist_r)*(1-np.cos(rays.theta))
-        # z0 = np.zeros_like(rays.phi)
 
-        ################################################################
-        # plot triangulated heatmap (initial field) without using phi and stuff for debugging
-        data_x =  initial_E_vec[:,0]**2
-        data_y =  initial_E_vec[:,1]**2
+        data_x =  np.real(initial_E_vec[:,0]*np.conj(initial_E_vec[:,0]))
+        data_y =  np.real(initial_E_vec[:,1]*np.conj(initial_E_vec[:,1]))
         
         self.heatmap_plot(x0, y0, data_x, data_y, title="Initial field")
 
@@ -456,112 +529,114 @@ class FlatMirror():
         p0 = np.array([x0, y0, z0]).T
         p_contact = p0 + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm.squeeze())
 
-        x0t = np.zeros_like(rays.phi)
-        y0t = np.zeros_like(rays.phi)
-        z0t = np.zeros_like(rays.phi)
-        p0_2 = np.array([x0t, y0t, z0t]).reshape(x0.shape[0], 3)
-        p0_2 = p0
-
-        p_contact_2 = p0_2 + dist_r.reshape(dist_r.shape[0], 1)*(rays.k_vec.squeeze())
-
         print(self.rot_y)
         # get N vector
         N = np.array([-np.tan(self.rot_y), 0, -1])
         N = N/np.linalg.norm(N)
         N = N.reshape(1,3,1)
-        k_vec = np.real(rays.k_vec)
 
-        p = np.cross(k_vec_norm, N, axis=1)  # get p vector (kxN)
-        r = np.cross(k_vec_norm, p, axis=1)  # get r vector (kxp)
+        p = np.cross(k_vec_norm, N, axis=1)  # get p vector (kxN) (s wave comp unit?)
+        r = np.cross(k_vec_norm, p, axis=1)  # get r vector (kxp) (p wave comp unit?)
 
         # normalize since we compute the angles without the normalization factor...
         p = self.normalize(p)  
         r = self.normalize(r)
 
-        # print("norm p", np.linalg.norm(p, axis=1))
-        # print("norm r", np.linalg.norm(r, axis=1))
-        
+        ###################################################################################################
+        #### ------------------------------------New method------------------------------------------- ####
+        parallel = r[:,:,0]
+        senkrecht = p[:,:,0]
+
+        ps_project = optical_matrices.ps_projection_matrix(parallel, senkrecht, np.squeeze(rays.k_vec))
+
+        M_fresnel_test = np.array([
+            [0.95,0,0],
+            [0,0.8,0],
+            [0,0,0]
+        ])
+        inv_ps_proj = np.linalg.inv(ps_project)
+  
+        #### ----------------------------------------------------------------------------------------- ####
+        ###################################################################################################
+
         # basis vectors
         x = np.array([1,0,0]).reshape(1,3,1)
         y = np.array([0,1,0]).reshape(1,3,1)
         z = np.array([0,0,1]).reshape(1,3,1)
-
-        # first rotation matrix:
-        m1 = np.cross(z, k_vec_norm, axis=1)
-        sin_m1 = np.linalg.norm(m1, axis=1)
-        theta_m1 = np.arcsin(sin_m1)
-
-        m1_unit = self.normalize(m1, axis=1)
-        # print("m1", m1)
-
-        m1_x = m1_unit[:,0]
-        m1_y = m1_unit[:,1]
-        m1_z = m1_unit[:,2]
-
-        M1 = optical_matrices.arbitrary_rotation(theta_m1, m1_x,m1_y,m1_z)
-        M1 = M1.reshape(M1.shape[0],3,3)
-        M1_inv = np.linalg.inv(M1)
-
-        r_prime = M1 @ r
-        p_prime = M1 @ p
-        x_prime = M1 @ x
-
-        Ep = np.tile([1,0,0], (k_vec_norm.shape[0], 1))
-        Es = np.tile([0,1,0], (k_vec_norm.shape[0], 1))
-        kps = np.tile([0,0,1], (k_vec_norm.shape[0], 1))
-        Ep_ps = np.expand_dims(Ep, axis=[0,3])
-        Es_ps = np.expand_dims(Es, axis=[0,3])
-        kps = np.expand_dims(kps, axis=[0,3])
-
-        print("Ep_ps shape", Ep_ps.shape)
-
-        Ep_ps_kz_xyz_ = (np.linalg.inv(M1) @ Ep_ps)
-        Ep_ps_kz_xyz = Ep_ps_kz_xyz_.squeeze()
-        Es_ps_kz_xyz = (np.linalg.inv(M1) @ Es_ps).squeeze()
-
-        m2 = np.cross(r_prime, x, axis=1)
-        # m2 = np.cross(r, x_inv_prime, axis=1)
-        # m2 = np.cross(Ep, x)
-
-        sin_m2 = np.linalg.norm(m2, axis=1)
-        theta_m2 = np.arcsin(sin_m2)
-        m2_unit = self.normalize(m2)#/np.linalg.norm(m2, axis=1).reshape(m2.shape[0],1,1)
-
-        m2_x = m2_unit[:,0]
-        m2_y = m2_unit[:,1]
-        m2_z = m2_unit[:,2]
-
-        # rotation matrix 2
-        pi_mask = abs(rays.phi) > np.pi/2 
-        theta_m2[pi_mask] = -theta_m2[pi_mask]
-        M2 = optical_matrices.arbitrary_rotation(theta_m2, m2_x,m2_y,m2_z)
-        M2 = M2.reshape(M2.shape[0],3,3)
-
-        M2M1 = M2 @ M1
-
-        M2_inv = np.linalg.inv(M2)
-        M2M1_inv = np.linalg.inv(M2M1)
-
-        N_ps = M2M1 @ N
-        k_ps = M2M1 @ rays.k_vec
-
-        kxN = np.cross(N_ps, k_ps, axis=1)
+        
+        # get angle 
+        kxN = np.cross(k_vec_norm, N, axis=1)
         sin_mr_1theta = np.linalg.norm(abs(kxN), axis=1)
         theta_i = np.arcsin(sin_mr_1theta)
 
         if self.perfect_mirror:
             M_fresnel = np.identity(3)
+            M_fresnel *= self.reflectance
         else:
+            M_fresnel = np.array([
+                [1,0,0],
+                [0,1,0],
+                [0,0,0]
+            ])
             M_fresnel = optical_matrices.protected_mirror_fresnel_matrix(
                 theta_i, self.n_film_data, self.film_thickness, self.n_metal_data, rays.lda)
 
         reflection_mat = optical_matrices.reflection_cartesian_matrix(N.squeeze())
 
-        rays.transfer_matrix = reflection_mat @ M2M1_inv @ M_fresnel @ M2M1 @ rays.transfer_matrix 
-        # rays.transfer_matrix = reflection_mat @ rays.transfer_matrix 
+        rays.transfer_matrix = reflection_mat @ inv_ps_proj @ M_fresnel @ ps_project @ rays.transfer_matrix 
         k_vec_ref =  reflection_mat @ rays.k_vec
 
+        print("----------------------Electric field after reflection------------------")
+        rays.quiver_plot(downsampling=1, n_rays = None)
+
+        # saving E fields for debugging # -------------------------
+
+        E_in = initial_E_vec
+        E_ps_proj = ps_project @ initial_E_vec_4d
+        E_ps_in = E_ps_proj[0,:,:,0]
+        E_ps_out = M_fresnel @ E_ps_proj
+        E_ps_out = E_ps_out[0,:,:,0]
+        E_out_4d = reflection_mat @ inv_ps_proj @ M_fresnel_test @ E_ps_proj
+        E_out = E_out_4d[0,:,:,0]
+
+        if self.fresnel_debug_savedir and not self.perfect_mirror:
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_in.csv"), E_ps_in)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_in.csv"), E_in)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_out.csv"), E_out)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "theta.csv"), theta_i)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "M_fresnel.csv"), M_fresnel.reshape(M_fresnel.shape[0], 9))
+
         rays.k_vec = k_vec_ref
+
+        ##### Check dot product
+        Eout_dot = np.sum(k_vec_ref[:,:,0] * E_out, axis=1)
+        # print("Dot product out")
+        plt.figure()
+        plt.scatter(initial_phi, Eout_dot)
+        plt.title("Phi against Eout dot with kout")
+        plt.show()
+
+        E_out2 = inv_ps_proj @ M_fresnel @ ps_project @ rays.transfer_matrix @ initial_E_vec_4d
+
+        ############   ############################################
+        ############ CHECK THIS ############################################
+        # rays.k_vec[:,2] = -rays.k_vec[:,2]  # dont worry about handedness? necessary for simulation to work -- otherwise E and k matrices need to be diff?
+
+        # now UN-fold the system to play nice with the tranformation matrices #
+        #############################################################################################
+        # This needs checking, I assume it is okay but need to verify it gets the same result i.e.  #
+        # find another way of doing this without unfolding and compare the result... or manually    #
+        # trace ray?                                                                                #
+        #############################################################################################
+
+        flip_mat = optical_matrices.flip_axis(2)
+        rays.transfer_matrix = flip_mat @ rays.transfer_matrix
+        rays.k_vec = flip_mat @ rays.k_vec
+        rays.negative_kz = True
+
+        #############################################################################################
 
         kz_gt_1_mask = np.squeeze(rays.k_vec[:,2] > 1)
         rays.theta[kz_gt_1_mask] = 0
@@ -569,11 +644,11 @@ class FlatMirror():
             #if kz_gt_1_mask:
             kz_gt_1_mask = np.reshape(kz_gt_1_mask, (1,))
         rays.k_vec[kz_gt_1_mask, 2] = 1
+
         rays.theta = np.arccos(rays.k_vec[:,2]).flatten()
 
+        # MINUS ON PHI TO REPRESENT HANDEDNESS CHANGE
         rays.phi = np.arctan2(rays.k_vec[:,1], rays.k_vec[:,0]).flatten()
-
-        rays.negative_kz = True
 
         # compare polar to cartesian
         x = np.sin(rays.theta)*np.cos(rays.phi)
@@ -586,26 +661,20 @@ class FlatMirror():
         ax1 = plt.figure().add_subplot(projection='3d')
         ax1.plot(rays.k_vec[:,0], rays.k_vec[:,1], rays.k_vec[:,2])
 
+        ###############################################################
+        # plot triangulated heatmap (reflected field) for debugging
+        data_x =  np.real(E_out[:,0]*np.conj(E_out[:,0]))
+        data_y =  np.real(E_out[:,1]*np.conj(E_out[:,0]))
+        
+        self.heatmap_plot(x, y, data_x, data_y, title="Reflected field")
+
+        ################################################################
+
         k_vec_norm_out = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1,1)
         p_out = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm_out.squeeze())
-        p_out_ref = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_ref.squeeze())
 
         p_out = p_out.squeeze()
         p_contact = p_contact.squeeze()
-        p_contact = p_contact_2
-
-        # print(x0.shape)
-        # print(p_contact.shape)
-        # print(p_contact[0].shape)
-        x_points = np.array([x0, p_contact[:,0], p_out[:,0]])
-        y_points = [y0, p_contact[:, 1], p_out[:, 1]]
-        z_points = [z0, p_contact[:,2], p_out[:, 2]]
-
-        x_normal_line = [p_contact[0,0], p_contact[0,0] + dist_r[0]*N[0,0,0]]
-        y_normal_line = [p_contact[0,1], p_contact[0,1] + dist_r[0]*N[0,1,0]]
-        z_normal_line = [p_contact[0,2], p_contact[0,2] + dist_r[0]*N[0,2,0]]
-
-         #print("N", N[0,0,0], N[0,1,0], N[0,2,0])
 
         xline1 = np.array([x0, p_contact[:,0]]).T
         yline1 = np.array([y0, p_contact[:,1]]).T
@@ -615,24 +684,22 @@ class FlatMirror():
         yline2 = np.array([p_contact[:,1], p_out[:,1]]).T
         zline2 = np.array([p_contact[:,2], p_out[:,2]]).T
 
-        xline2r = np.array([p_contact[:,0], p_out_ref[:,0]]).T
-        yline2r = np.array([p_contact[:,1], p_out_ref[:,1]]).T
-        zline2r = np.array([p_contact[:,2], p_out_ref[:,2]]).T
 
-        Ep_xyz = M2M1_inv @ Ep_ps
-        Es_xyz = M2M1_inv @ Es_ps
-        print("Ep_xyz.shape", Ep_xyz.shape)
+        # Used to check inverse transform from p,s ########
+
+        Ep = np.tile([1,0,0], (k_vec_norm.shape[0], 1))
+        Es = np.tile([0,1,0], (k_vec_norm.shape[0], 1))
+        kps = np.tile([0,0,1], (k_vec_norm.shape[0], 1))
+        Ep_ps = np.expand_dims(Ep, axis=[0,3])
+        Es_ps = np.expand_dims(Es, axis=[0,3])
+        kps = np.expand_dims(kps, axis=[0,3])
+
+        Ep_xyz = inv_ps_proj @ Ep_ps
+        Es_xyz = inv_ps_proj @ Es_ps
         Ep_xyz = Ep_xyz[0,:,:,0]
         Es_xyz = Es_xyz[0,:,:,0]
 
-        Ep_r_dot = np.sum(Ep_xyz.squeeze() * r.squeeze(), axis=1)/np.linalg.norm(Ep_xyz, axis=1)
-        print("Ep_r_dot (should be 1)", Ep_r_dot)
-        x_over_y = rays.k_vec[:,0,:]/rays.k_vec[:,1,:]
-        print("k_vec x/y", rays.k_vec[:,0,:]/rays.k_vec[:,1,:])
-
-        fig_dot = plt.figure()
-        plt.scatter(rays.phi, abs(Ep_r_dot))
-        plt.show()
+        ###################################################
 
         ax = plt.figure().add_subplot(projection='3d')
 
@@ -657,7 +724,7 @@ class FlatMirror():
             ax.set_aspect('equal')
 
         return rays
-
+    
 class ProtectedFlatMirror(FlatMirror):
     def __init__(self, rot_y):
         super().__init__(rot_y)

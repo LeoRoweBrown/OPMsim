@@ -190,3 +190,55 @@ class PupilPlotObject():
             os.makedirs(dirname)
         print("Saving in %s" % save_dir)
         self.figure.savefig(save_dir, bbox_inches='tight')
+
+def heatmap_plot(x0, y0, data_x, data_y, title=""):
+    fig = plt.figure(figsize=[10,3]) 
+
+    max_for_scale = np.max([np.max(data_x), np.max(data_y)])
+    min_for_scale = np.min([np.min(data_x), np.min(data_y)])
+
+    import matplotlib
+    cbar_ticks = np.linspace(min_for_scale, max_for_scale, 11)
+    cmap=matplotlib.cm.get_cmap('autumn_r')
+
+    ax = fig.add_subplot(131)
+    # print("I-field data",  trace_E_vec[:,0]**2)
+    levels = np.linspace(min_for_scale, max_for_scale, 257)
+
+
+    pc1 = ax.tricontourf(x0, y0, data_x, cmap=cmap,\
+        levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+
+    # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    ax.set_title("X component intensity")
+    
+    fig.colorbar(pc1, ax=ax, fraction=0.04, pad=0.15, ticks=cbar_ticks)
+    
+    ax2 = fig.add_subplot(132)
+    levels = np.linspace(min_for_scale, max_for_scale, 257)
+
+    pc2 = ax2.tricontourf(x0, y0, data_y, cmap=cmap,\
+        levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+
+    # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
+    ax2.set_aspect('equal')
+    ax2.axis('off')
+    ax2.set_title("Y component intensity")
+    
+    fig.colorbar(pc2, ax=ax2, fraction=0.04, pad=0.15, ticks=cbar_ticks)
+    ax3 = fig.add_subplot(133)
+    levels = np.linspace(min_for_scale, max_for_scale, 257)
+
+    pc3 = ax3.tricontourf(x0, y0, data_y+data_x, cmap=cmap,\
+        levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+
+    # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
+    ax3.set_aspect('equal')
+    ax3.axis('off')
+    ax3.set_title("Y+X component intensity")
+    
+    fig.colorbar(pc3, ax=ax3, fraction=0.04, pad=0.15, ticks=cbar_ticks)
+
+    fig.suptitle(title)

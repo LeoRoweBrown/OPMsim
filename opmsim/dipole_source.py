@@ -50,6 +50,15 @@ class DipoleSource:
             np.sin(self.alpha_d)))
         self.p_vec = self.p_vec.reshape((len(self.phi_d), 3))
 
+    def get_2pi_energy(self, f, rays):
+        phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
+            1, ray_count=5000, method='uniform_phi_inbetween')
+        rays_1NA = PolarRays(phi_k, theta_k, f, areas, lda=self.lda_em)
+        self.get_initial_efields(rays_1NA)
+        
+        return rays_1NA.initial_energy
+
+
     def get_initial_efields(self, rays):
         # use _get_efield to calculate the E field based on a propagation vector
         # and the dipole distribution
@@ -75,9 +84,9 @@ class DipoleSource:
         rays.E_vec = rays.E_vec.reshape((n_dipoles, n_rays, 3, 1)) # E_vecs are (3x1)
         rays.E_pre  = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
 
-        self.density = self.density.reshape((n_dipoles, 1, 1, 1))
         rays.I_total_initial = np.sum(rays.E_vec * rays.E_vec*self.density, axis=0)
-        rays.initial_energy = np.sum(rays.I_total_initial)
+        # energy per dipole
+        rays.initial_energy = np.sum(rays.I_total_initial)/n_dipoles
 
         print("initial energy shape", rays.initial_energy.shape)
 
@@ -117,7 +126,7 @@ class DipoleSource:
 
         elif method == 'uniform':
             phi_d, theta_d, areas = \
-                distribution_functions.uniform_points_on_sphere(point_count=dipole_count)
+                distribution_functions.uniform_points_on_sphere(point_count=dipole_count, hemisphere=False)
             self.phi_d = np.append(self.phi_d, phi_d)
             self.alpha_d = np.append(self.alpha_d, np.pi/2 - theta_d)
         
@@ -223,29 +232,71 @@ class DipoleSource:
         # plt.scatter([p_test_rot[0]], [p_test_rot[1]], [p_test_rot[2]]) 
         # plt.show()
 
-    def plot_distribution(self, alphas=None):
+    def plot_distribution(self, alphas=[]):
         # plot on sphere - maybe move this plotting somewhere more elegant
         x = np.cos(self.alpha_d)*np.sin(self.phi_d)
         y = np.cos(self.alpha_d)*np.cos(self.phi_d)
         z = np.sin(self.alpha_d)
 
+        facec_ = np.asarray(np.tile([0,0,0,0], [len(x),1]), dtype=np.float64)
+        edgec_ = np.asarray(np.tile([0,0,0,1], [len(x),1]), dtype=np.float64)
+
+        if len(alphas) == 0:
+            alphas = np.ones_like(x)
+
         ## plot to verify distribution
         f2d = plt.figure(figsize=(14, 7))
-        ax_xz = f2d.add_subplot(221)
-        ax_xz.scatter(z, x, s=4, alpha=alphas)
+        ax_xz = f2d.add_subplot(131)
+        y_mask = y > 0 # get positive y
+        facec = facec_
+        edgec = edgec_
+        facec[y_mask] = [0,0,0,1]
+        edgec[:,3] *= alphas
+        facec[:,3] *= alphas
+        # facecolors = np.array(['none']*len(x))
+        # ax_xz.scatter(z[y_mask], x[y_mask], s=5, alpha=alphas)
+        ax_xz.scatter(z, x, s=5, facecolors=facec, edgecolors=edgec)
+        # plot points with y < 0, i.e. the 'behind' points
+        # ax_xz.scatter(z[np.invert(y_mask)], x[np.invert(y_mask)],\
+        #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
         ax_xz.set_title("Distribution of dipole points \n on sphere (ZX)")
         ax_xz.set_xlabel("z")
         ax_xz.set_ylabel("x")
         ax_xz.set_aspect('equal')
-        ax_xy = f2d.add_subplot(222)
+
+        ax_xy = f2d.add_subplot(132)
+        z_mask = z > 0 # get positive z
+        facec = facec_
+        edgec = edgec_
+        facec[z_mask] = [0,0,0,1]
+        edgec[:,3] *= alphas
+        facec[:,3] *= alphas
+        facecolors = np.array(['none']*len(x))
+        facecolors[z_mask] = 'k'
         ax_xy.set_title("Distribution of dipole points \n on sphere (YX)")
-        ax_xy.scatter(y, x, s=4, alpha=alphas)
+        ax_xy.scatter(y, x, s=5, facecolors=facec, edgecolors=edgec)
+        # ax_xy.scatter(y[z_mask], x[z_mask], s=5, alpha=alphas)
+        # ax_xy.scatter(y[np.invert(z_mask)], x[np.invert(z_mask)],\
+        #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
         ax_xy.set_xlabel("y")
         ax_xy.set_ylabel("x")
         ax_xy.set_aspect('equal')
-        ax_zy = f2d.add_subplot(223)
+
+        ax_zy = f2d.add_subplot(133)
+        x_mask = x > 0
+        facec = facec_
+        edgec = edgec_
+        facec[x_mask] = [0,0,0,1]
+        edgec[:,3] *= alphas
+        facec[:,3] *= alphas
+        facecolors = np.array(['none']*len(x))
+        facecolors[x_mask] = 'k'
         ax_zy.set_title("Distribution of dipole points \n on sphere (YZ)")
-        ax_zy.scatter(z, y, s=4, alpha=alphas)
+        ax_zy.scatter(z, y, s=5, facecolors=facec, edgecolors=edgec)
+        # ax_zy.scatter(z[x_mask], y[x_mask], s=5, alpha=alphas)
+        # ax_zy.scatter(z[np.invert(x_mask)], y[np.invert(x_mask)],\
+        #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
+
         ax_zy.set_xlabel("z")
         ax_zy.set_ylabel("y")
         ax_zy.set_aspect('equal')
@@ -277,27 +328,34 @@ class DipoleSource:
         x = np.sin(theta)*np.sin(phi)
         y = np.sin(theta)*np.cos(phi)
         z = np.cos(theta)
+        zeros = np.zeros_like(x)
 
         ## plot to verify distribution
         f2d = plt.figure(figsize=(14, 7))
-        ax_xz = f2d.add_subplot(221)
+        ax_xz = f2d.add_subplot(131)
         ax_xz.scatter(z, x, s=2)
         ax_xz.set_title("Distribution of ray points \n on sphere (ZX)")
         ax_xz.set_xlabel("z")
         ax_xz.set_ylabel("x")
         ax_xz.set_aspect('equal')
-        ax_xy = f2d.add_subplot(222)
+        for i in range(len(z)):
+            ax_xz.plot([0,z[i]],[0,x[i]], color=[0,0,0,0.15])
+        ax_xy = f2d.add_subplot(132)
         ax_xy.set_title("Distribution of ray points \n on sphere (YX)")
         ax_xy.scatter(y, x, s=2)
         ax_xy.set_xlabel("y")
         ax_xy.set_ylabel("x")
         ax_xy.set_aspect('equal')
-        ax_zy = f2d.add_subplot(223)
+        for i in range(len(y)):
+            ax_xy.plot([0,y[i]],[0,x[i]], color=[0,0,0,0.15])
+        ax_zy = f2d.add_subplot(133)
         ax_zy.set_title("Distribution of ray points \n on sphere (YZ)")
         ax_zy.scatter(z, y, s=2)
         ax_zy.set_xlabel("z")
         ax_zy.set_ylabel("y")
         ax_zy.set_aspect('equal')
+        for i in range(len(y)):
+            ax_zy.plot([0,z[i]],[0,y[i]], color=[0,0,0,0.15])
         f2d.tight_layout()       
         plt.show()
 
@@ -331,6 +389,7 @@ class DipoleSource:
 
         self.rays = PolarRays(phi_k, theta_k, f, areas, lda=self.lda_em)
         self.get_initial_efields(self.rays)
+        # self.density = self.density.reshape((len(phi_k), 1, 1, 1))
 
         if plot_sphere:
             self.plot_ray_sphere(phi_k, theta_k)

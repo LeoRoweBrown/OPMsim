@@ -116,6 +116,38 @@ def wave_plate(psi, delta):
     ])
     return waveplate
 
+def diagonal(value=1):
+    return value*np.identity(3)
+
+def ps_projection_matrix(p, s, k_vec):
+    """project E onto p and s component in reflection, p = k1 x N, s = k1 x p"""
+    # for loop instead of vectorise just for safety.. reshape likes to muddle up elements
+    ps_projection = np.zeros((p.shape[0], 3, 3))
+    print(p.shape)
+    print(p[0,0].shape)
+    print(k_vec[0,0].shape)
+    print(k_vec.shape)
+    for n in range((p.shape[0])):
+        ps_projection[n, :, :] = np.array([
+            [p[n,0], p[n,1], p[n,2]],
+            [s[n,0], s[n,1], s[n,2]],
+            [k_vec[n,0], k_vec[n,1], k_vec[n,2]]
+        ])
+    return ps_projection
+
+# def ps_projection_matrix(p, s, k_vec):
+#     ps_projection_mat = np.array([
+#         [p[0], p[1], p[2]],
+#         [s[0], s[1], s[2]],
+#         [k_vec[0], k_vec[1], k_vec[2]]
+#     ])
+#     return ps_projection_mat
+
+def flip_axis(axis=2):
+    flip = np.identity(3)
+    flip[axis,axis] = -1
+    return flip
+
 def rotate_rays_x(angle):
     rot_mat_y = np.array([
         [np.cos(angle), 0, np.sin(angle)],

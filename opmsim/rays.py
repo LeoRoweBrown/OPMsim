@@ -4,6 +4,7 @@ import numpy as np
 import copy
 from . import optical_matrices
 import matplotlib.pyplot as plt
+from math import ceil
 
 ## vectorised version of ray
 
@@ -84,7 +85,7 @@ class PolarRays:
             print("Inverting meridional")
             self.meridional_transform(inverse=True)
         # method 1:
-        if self.negative_kz:
+        if np.any(self.k_vec[:,2] < 0):
             print("kz are negative!")
             reverse_phi = True
             #theta = np.pi-self.theta
@@ -114,14 +115,18 @@ class PolarRays:
         if self.isMeridional != inverse:
             raise Exception("Cannot apply meridional transform twice in same direction")
         phi = self.phi
-        if reverse_phi:
-            phi = -self.phi
-                
+        merid_tensor_rev = optical_matrices.meridional_transform_tensor(
+            -self.phi, inverse)     
         merid_tensor = optical_matrices.meridional_transform_tensor(
-            phi, inverse)
+            self.phi, inverse)
+        
+        if reverse_phi: # or rays.negative_kz
+            self.transfer_matrix = merid_tensor_rev @ self.transfer_matrix
+        else:
+            self.transfer_matrix = merid_tensor @ self.transfer_matrix
         self.k_vec = merid_tensor @ self.k_vec
         self.isMeridional = not inverse
-        self.transfer_matrix = merid_tensor @ self.transfer_matrix
+
 
     def finalize_rays_coordinates(self,inverse_meridional=True):
 
@@ -179,17 +184,45 @@ class PolarRays:
         self.E_vec[:, escaped, :, :] = 0
         # print("alternative minimum", self.alternative_minimum)
 
-    def quiver_plot(self, show_plots='2d', downsampling=50, n_rays=40,\
+    def quiver_plot_debug(self, show_plots='2d', downsampling=50, n_rays=40,\
         E_vec_num=10, use_rho=False):
         started_merid = False
         if self.isMeridional:  # put back into non meridional basis
             self.meridional_transform(inverse=True)
             started_merid = True
 
-        downsample_mask = list(range(0,self.n-1,downsampling))
+        # do all
+        E_vec_all_before = self.E_vec
+        E_vec_all = self.transfer_matrix @ self.E_vec
+        E_vec_all_after = E_vec_all
+        tf_all = self.transfer_matrix
+        E_vec_all = E_vec_all.reshape((E_vec_all.shape[0], E_vec_all.shape[1], 3))
+        print("vec all shape x", E_vec_all[0, :, 0].shape)
+        print("vec all shape y", E_vec_all[0, :, 1].shape)
+        print("vec all shape conj y", np.conj(E_vec_all[0, :, 1]).shape)
+        Ix = np.squeeze(E_vec_all[0, :, 0]*np.conj(E_vec_all[0, :, 0]))
+        Iy = np.squeeze(E_vec_all[0, :, 1]*np.conj(E_vec_all[0, :, 1]))
+        
+        plt.figure()
+        plt.scatter(E_vec_all[0, :, 0].real, E_vec_all[0, :, 1].real)
+        plt.title("scatter for E real component all")
+        plt.show()
+        plt.figure()
+        plt.scatter(E_vec_all[0, :, 0].imag, E_vec_all[0, :, 1].imag)
+        plt.title("scatter for E imag component all")
+        plt.show()
+        plt.figure()
+        plt.scatter(Ix, Iy)
+        plt.title("scatter for E modulus component all")
+        plt.show()
+
+
+        downsample_mask = list(range(0,self.n,downsampling))
         if n_rays is not None:
             downsample_mask = np.random.randint(0, self.n-1, n_rays)
-            downsample_mask = list(range(0,self.n-1,int(self.n/n_rays)))
+            downsample_mask = list(range(0,self.n,int(self.n/n_rays)))
+
+        # E_vec_mask = E_vec_all[:, downsample_mask, :, :]    
 
         theta = self.theta[downsample_mask]
         phi = self.phi[downsample_mask]
@@ -199,12 +232,13 @@ class PolarRays:
         y = np.sin(theta)*np.sin(phi)
         x = np.sin(theta)*np.cos(phi)
         print(np.all(np.abs(theta) < 1e-6) )
-        if (np.all(np.abs(theta) < 1e-6) ) or use_rho:# or any(rho > 1e-6):
+        if (np.mean(np.abs(theta)) < 1e-6)  or use_rho:# or any(rho > 1e-6):
             print("Plotting Rho")
+            print(np.mean(np.abs(theta)) )
             z = np.zeros(len(theta))
             y = abs(rho)*np.sin(phi)
             x = abs(rho)*np.cos(phi)
-
+            print("max x,y from rho", np.max(np.abs(x)), np.max(np.abs(y)))
 
         k_vec = self.k_vec[downsample_mask]
         transfer_matrix = self.transfer_matrix[:, downsample_mask, :, :]
@@ -213,8 +247,11 @@ class PolarRays:
         escaped = escaped[downsample_mask]
         E_vec = self.E_vec[:, downsample_mask, :, :]
         not_escaped = np.invert(escaped)
+        # not_escaped = np.ones_like(not_escaped)*True
 
         E_vec = E_vec[:, not_escaped, :, :]
+        print("vec shape x", E_vec_all[0, :, 0].shape)
+
         k_vec = k_vec[not_escaped, : , :]
         transfer_matrix = transfer_matrix[:, not_escaped, :, :]
         phi = phi[not_escaped]
@@ -223,8 +260,20 @@ class PolarRays:
         y = y[not_escaped]
         z = z[not_escaped]
         # rho = rho[not_escaped]
-        print()
+        print("E_Vec before tf", E_vec.shape)
+        print("tf resid", np.array_equal(tf_all , transfer_matrix))
+
+        plt.figure()
+        plt.scatter(E_vec[:,:,0,0], E_vec[:,:,1,0])
+        plt.title("E before (E_vec)")
+        plt.show()
+        plt.figure()
+        plt.scatter(E_vec_all_before[:,:,0,0]*np.conj(E_vec_all_before[:,:,0,0]), E_vec_all_before[:,:,1,0]*np.conj(E_vec_all_before[:,:,1,0]))
+        plt.title("I before (E_vec_all)")
+        plt.show()
+        E_vec_before = E_vec
         E_vec = transfer_matrix @ E_vec  # this will be slow!
+        print("E_Vec after tf", E_vec.shape)
         I_vec = np.sum(E_vec*E_vec, axis=0)
         I_vec = np.reshape(I_vec, (I_vec.shape[0], 3))
         k_vec = np.reshape(k_vec, (k_vec.shape[0], 3))
@@ -233,43 +282,237 @@ class PolarRays:
         print(I_vec_mag.shape)
         I_vec=I_vec/I_vec_mag
 
+        print("E before resid", np.array_equal(E_vec_all_before, E_vec_before))
+        print("E after resid", np.array_equal(E_vec,E_vec_all_after))
+
         print(I_vec.shape)
         print("max k_vec in x,y", np.max(np.abs(k_vec[:,0])), np.max(np.abs(k_vec[:,1])))
+        print("max E_vec x, y", np.max(np.abs(E_vec[:, :, 0])), np.max(np.abs(E_vec[:, :, 1])))
+        print("E shape", E_vec.shape)
+
         if E_vec_num is not None:
-            E_vec_num_mask = list(range(0, E_vec.shape[0]-1, int(E_vec.shape[0]/E_vec_num)))
-            E_vec = E_vec[E_vec_num_mask, :, :]
+            ndipole = E_vec.shape[0]
+            if ndipole > 1: # edge case for 1 dipole source
+                ndipole -= 1
+            E_vec_num_mask = list(range(0, ndipole, int(ceil(E_vec.shape[0]/E_vec_num))))
+            E_vec = E_vec[E_vec_num_mask,:, :, :]
+            print("E_vec.shape[1]", E_vec.shape[1])
         
         if show_plots == 'all':  # do 3d plot
             ax = plt.figure(figsize=[14,9]).add_subplot(projection='3d')
             #ax.quiver(x, y, z, I_vec[:, 0], I_vec[:, 1], I_vec[:, 2], length=0.12, normalize=True)
             ax.quiver(x, y, z, k_vec[:, 0], k_vec[:, 1], k_vec[:, 2], length=0.12, normalize=True, color='k')
-            ax.quiver(x, y, z, E_vec[:, :, 0], E_vec[:, :, 1], E_vec[:, :, 2], length=0.12, normalize=True)
+            ax.quiver(x, y, z, E_vec[0,:, :, 0].real, E_vec[0,:, :, 1].real, E_vec[0,:, :, 2].real, scale=0.12, normalize=True, color='g')
+            ax.quiver(x, y, z, E_vec[0,:, :, 0].imag, E_vec[0,:, :, 1].imag, E_vec[0,:, :, 2].imag, scale=0.12, normalize=True, color='purple')
+
             ax.set_xlim3d(-1, 1)
             ax.set_ylim3d(-1, 1)
             ax.set_zlim3d(-1, 1)
             plt.show()
+
+        plt.figure()
+        plt.scatter(E_vec_all_after[:, :, 0,0]*np.conj(E_vec_all_after[:, :, 0,0]), E_vec_all_after[:, :, 1,0]*np.conj(E_vec_all_after[:, :, 1,0]))
+        plt.title("scatter for E modulus component, before reshape")
+        plt.show()    
+        print("E_vec.shape", E_vec.shape)
+        print("E_vec.shape[1]", E_vec.shape[1])
+
         E_vec = E_vec.reshape((E_vec.shape[0], E_vec.shape[1], 3))
         k_vec = np.tile(k_vec, [E_vec.shape[0],1,1])
         x = np.tile(x, [E_vec.shape[0],1,1])
         y = np.tile(y, [E_vec.shape[0],1,1])
         z = np.tile(z, [E_vec.shape[0],1,1])
-        width = np.max([x,y,z])*0.005
-        E_width = width*0.9
+        # width = np.max([x,y,z])*0.005
+        # E_width = width*0.9
+        E_width = 0.005
+        width = 0.005
         print(k_vec.shape)
+        # print("Evec real", E_vec.real)
+        figsc = plt.figure()
+        plt.scatter(x,y)
+        plt.show()
+
         fig = plt.figure(figsize=[10,3])
         ax = fig.add_subplot(131)
-        ax.quiver(x, y, E_vec[:, :, 0], E_vec[:, :, 1], color='blue', width=E_width)
-        ax.quiver(x, y, k_vec[:, :, 0], k_vec[:, :, 1], scale=13, width=width)
+
+        ax.scatter(x,y)
+        ax.quiver(x, y, E_vec[:, :, 0].real, E_vec[:, :, 1].real, color='g', width=E_width, scale=10)
+        ax.quiver(x, y, E_vec[:, :, 0].imag, E_vec[:, :, 1].imag, color='purple', width=E_width, scale=10)
+        ax.quiver(x, y, k_vec[:, :, 0], k_vec[:, :, 1], width=width, scale=10)
         ax.set_aspect('equal')
         ax1 = fig.add_subplot(132)
-        ax1.quiver(x, z, E_vec[:, :, 0], E_vec[:, :, 2], color='blue', width=E_width)
-        ax1.quiver(x, z, k_vec[:, :, 0], k_vec[:, :, 2], scale=13, width=width)
+        ax1.scatter(x,z)
+        ax1.quiver(x, z, E_vec[:, :, 0].real, E_vec[:, :, 2].real, color='g', width=E_width, scale=10)
+        ax1.quiver(x, z, E_vec[:, :, 0].imag, E_vec[:, :, 2].imag, color='purple', width=E_width, scale=10)
+        ax1.quiver(x, z, k_vec[:, :, 0], k_vec[:, :, 2], width=width, scale=10)
         ax1.set_aspect('equal')
         ax2 = fig.add_subplot(133)
-        ax2.quiver(y, z, E_vec[:, :, 1], E_vec[:, :, 2], color='blue', width=E_width)
-        ax2.quiver(y, z, k_vec[:, :, 1], k_vec[:, :, 2], scale=13, width=width)
+        ax2.scatter(y,z)
+        ax2.quiver(y, z, E_vec[:, :, 1].real, E_vec[:, :, 2].real, color='g', width=E_width, scale=10)
+        ax2.quiver(y, z, E_vec[:, :, 1].imag, E_vec[:, :, 2].imag, color='purple', width=E_width, scale=10)
+        ax2.quiver(y, z, k_vec[:, :, 1], k_vec[:, :, 2], width=width, scale=10)
+        ax2.set_aspect('equal')
+        plt.show()
+
+        plt.figure()
+        plt.scatter(E_vec_all_after[:, :, 0].real, E_vec_all_after[:, :, 1].real)
+        plt.title("scatter for E real component all")
+        plt.show()
+        plt.figure()
+        plt.scatter(E_vec_all_after[:, :, 0].imag, E_vec_all_after[:, :, 1].imag)
+        plt.title("scatter for E imag component all")
+        plt.show()
+        plt.figure()
+        plt.scatter(E_vec_all_after[:, :, 0]*np.conj(E_vec_all_after[:, :, 0]), E_vec_all_after[:, :, 1]*np.conj(E_vec_all_after[:, :, 1]))
+        plt.title("scatter for E modulus component all")
+        plt.show()
+
+        print(E_vec_all_after[:, :, :,0].shape, E_vec.shape)
+        plt.figure()
+        plt.scatter(E_vec_all_after[:, :, :,0],E_vec)
+        plt.show()
+
+        plt.figure()
+        plt.scatter(E_vec[:, :, 0].real, E_vec[:, :, 1].real)
+        plt.title("scatter for E real component")
+        plt.show()
+        plt.figure()
+        plt.scatter(E_vec[:, :, 0].imag, E_vec[:, :, 1].imag)
+        plt.title("scatter for E imag component")
+        plt.show()
+        plt.figure()
+        plt.scatter(E_vec[:, :, 0]*np.conj(E_vec[:, :, 0]), E_vec[:, :, 1]*np.conj(E_vec[:, :, 1]))
+        plt.title("scatter for E modulus component")
+        plt.show()
+
+        if started_merid == True:
+            self.meridional_transform(inverse=False)
+
+        return self, E_vec
+    
+    def quiver_plot(self, show_plots='2d', downsampling=50, n_rays=40,\
+        E_vec_num=10, use_rho=False):
+        started_merid = False
+        if self.isMeridional:  # put back into non meridional basis
+            self.meridional_transform(inverse=True)
+            started_merid = True
+
+        # do all
+        E_vec_all_before = self.E_vec
+        E_vec_all = self.transfer_matrix @ self.E_vec
+        tf_all = self.transfer_matrix
+        E_vec_all = E_vec_all.reshape((E_vec_all.shape[0], E_vec_all.shape[1], 3))
+        Ix = np.squeeze(E_vec_all[0, :, 0]*np.conj(E_vec_all[0, :, 0]))
+        Iy = np.squeeze(E_vec_all[0, :, 1]*np.conj(E_vec_all[0, :, 1]))
+        
+
+
+        downsample_mask = list(range(0,self.n,downsampling))
+        if n_rays is not None:
+            downsample_mask = np.random.randint(0, self.n-1, n_rays)
+            downsample_mask = list(range(0,self.n,int(self.n/n_rays)))
+
+        # E_vec_mask = E_vec_all[:, downsample_mask, :, :]    
+
+        theta = self.theta[downsample_mask]
+        phi = self.phi[downsample_mask]
+        rho = self.rho[downsample_mask]
+
+        z = np.cos(theta)
+        y = np.sin(theta)*np.sin(phi)
+        x = np.sin(theta)*np.cos(phi)
+        print(np.all(np.abs(theta) < 1e-6) )
+        if (np.mean(np.abs(theta)) < 1e-6)  or use_rho:# or any(rho > 1e-6):
+            print("Plotting Rho")
+            print(np.mean(np.abs(theta)) )
+            z = np.zeros(len(theta))
+            y = abs(rho)*np.sin(phi)
+            x = abs(rho)*np.cos(phi)
+            print("max x,y from rho", np.max(np.abs(x)), np.max(np.abs(y)))
+
+        k_vec = self.k_vec[downsample_mask]
+        transfer_matrix = self.transfer_matrix[:, downsample_mask, :, :]
+        transfer_matrix = transfer_matrix.reshape((1,len(downsample_mask),3,3))
+        escaped = np.array(self.escaped)
+        escaped = escaped[downsample_mask]
+        E_vec = self.E_vec[:, downsample_mask, :, :]
+        not_escaped = np.invert(escaped)
+        # not_escaped = np.ones_like(not_escaped)*True
+
+        E_vec = E_vec[:, not_escaped, :, :]
+
+        k_vec = k_vec[not_escaped, : , :]
+        transfer_matrix = transfer_matrix[:, not_escaped, :, :]
+        phi = phi[not_escaped]
+        theta = theta[not_escaped]
+        x = x[not_escaped]
+        y = y[not_escaped]
+        z = z[not_escaped]
+        # rho = rho[not_escaped]
+
+        E_vec_before = E_vec
+        E_vec = transfer_matrix @ E_vec  # this will be slow!
+        I_vec = np.sum(E_vec*E_vec, axis=0)
+        I_vec = np.reshape(I_vec, (I_vec.shape[0], 3))
+        k_vec = np.reshape(k_vec, (k_vec.shape[0], 3))
+        I_vec_mag = np.sqrt(I_vec[:,0]**2 + I_vec[:,1]**2 + I_vec[:,2]**2 )
+        I_vec_mag = I_vec_mag.reshape((I_vec_mag.shape[0], 1))
+        I_vec=I_vec/I_vec_mag
+
+
+        if E_vec_num is not None:
+            ndipole = E_vec.shape[0]
+            if ndipole > 1: # edge case for 1 dipole source
+                ndipole -= 1
+            E_vec_num_mask = list(range(0, ndipole, int(ceil(E_vec.shape[0]/E_vec_num))))
+            E_vec = E_vec[E_vec_num_mask,:, :, :]
+            print("E_vec.shape[1]", E_vec.shape[1])
+        
+        if show_plots == 'all':  # do 3d plot
+            ax = plt.figure(figsize=[14,9]).add_subplot(projection='3d')
+            #ax.quiver(x, y, z, I_vec[:, 0], I_vec[:, 1], I_vec[:, 2], length=0.12, normalize=True)
+            ax.quiver(x, y, z, k_vec[:, 0], k_vec[:, 1], k_vec[:, 2], length=0.12, normalize=True, color='k')
+            ax.quiver(x, y, z, E_vec[0,:, :, 0].real, E_vec[0,:, :, 1].real, E_vec[0,:, :, 2].real, scale=0.12, normalize=True, color='g')
+            ax.quiver(x, y, z, E_vec[0,:, :, 0].imag, E_vec[0,:, :, 1].imag, E_vec[0,:, :, 2].imag, scale=0.12, normalize=True, color='purple')
+
+            ax.set_xlim3d(-1, 1)
+            ax.set_ylim3d(-1, 1)
+            ax.set_zlim3d(-1, 1)
+            plt.show()
+
+        E_vec = E_vec.reshape((E_vec.shape[0], E_vec.shape[1], 3))
+        k_vec = np.tile(k_vec, [E_vec.shape[0],1,1])
+        x = np.tile(x, [E_vec.shape[0],1,1])
+        y = np.tile(y, [E_vec.shape[0],1,1])
+        z = np.tile(z, [E_vec.shape[0],1,1])
+        # width = np.max([x,y,z])*0.005
+        # E_width = width*0.9
+        E_width = 0.005
+        width = 0.005
+        # print("Evec real", E_vec.real)
+        fig = plt.figure(figsize=[10,3])
+        ax = fig.add_subplot(131)
+
+        ax.scatter(x,y)
+        ax.quiver(x, y, E_vec[:, :, 0].real, E_vec[:, :, 1].real, color='g', width=E_width, scale=10)
+        ax.quiver(x, y, E_vec[:, :, 0].imag, E_vec[:, :, 1].imag, color='purple', width=E_width, scale=10)
+        ax.quiver(x, y, k_vec[:, :, 0], k_vec[:, :, 1], width=width, scale=10)
+        ax.set_aspect('equal')
+        ax1 = fig.add_subplot(132)
+        ax1.scatter(x,z)
+        ax1.quiver(x, z, E_vec[:, :, 0].real, E_vec[:, :, 2].real, color='g', width=E_width, scale=10)
+        ax1.quiver(x, z, E_vec[:, :, 0].imag, E_vec[:, :, 2].imag, color='purple', width=E_width, scale=10)
+        ax1.quiver(x, z, k_vec[:, :, 0], k_vec[:, :, 2], width=width, scale=10)
+        ax1.set_aspect('equal')
+        ax2 = fig.add_subplot(133)
+        ax2.scatter(y,z)
+        ax2.quiver(y, z, E_vec[:, :, 1].real, E_vec[:, :, 2].real, color='g', width=E_width, scale=10)
+        ax2.quiver(y, z, E_vec[:, :, 1].imag, E_vec[:, :, 2].imag, color='purple', width=E_width, scale=10)
+        ax2.quiver(y, z, k_vec[:, :, 1], k_vec[:, :, 2], width=width, scale=10)
         ax2.set_aspect('equal')
         plt.show()
 
         if started_merid == True:
             self.meridional_transform(inverse=False)
+
+

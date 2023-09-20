@@ -553,8 +553,6 @@ class FlatMirror():
         M1 = optical_matrices.arbitrary_rotation(theta_m1, m1_x,m1_y,m1_z)
         M1_neg = optical_matrices.arbitrary_rotation(-theta_m1, m1_x,m1_y,m1_z)
         
-        # print("M1",M1)
-
         # apply 1st rotation matrix
         # print("M1.shape", M1.shape)
         M1 = M1.reshape(M1.shape[0],3,3)
@@ -578,7 +576,6 @@ class FlatMirror():
         rpxXp = np.cross(r_prime, x_prime, axis=1)
         m2 = np.cross(r_prime, x, axis=1)
         # m2 = np.cross(r_prime, x_prime, axis=1)
-        
 
         print("r' cross x' (should be about k_vec, 0,0,1)", rpxXp)
         print("kvec", k_vec_norm)

@@ -88,14 +88,20 @@ def trace_rays(elements, source, options):
     detector.energy_per_dipole = rays.final_energy/source.n_dipoles
     detector.energy_ratio = rays.final_energy/np.sum(rays.initial_energy)
     detector.n_dipoles = source.n_dipoles
-    detector.Iy_Ix_ratio = np.sum(rays.I_total[:,1])/np.sum(rays.I_total[:,0])
-    print("Iy Ix ratio =", detector.Iy_Ix_ratio)
+    Energy_x = np.sum(rays.I_total[:,0])
+    Energy_y = np.sum(rays.I_total[:,1])
+    detector.Ix_Iy_ratio = Energy_x/Energy_y
+    old_Ix_Iy_ratio = np.sum(np.sum(rays.I_total[:,0]/rays.I_total[:,1]))
+    print("Ix Iy ratio =", old_Ix_Iy_ratio)
+    print("Energy from Ix", Energy_x)
+    print("Energy from Iy", Energy_y)
+    print("X/Y energy ratio =", detector.Ix_Iy_ratio)
     
 
     if any(np.abs(rays.I_total[:,2] > 1e-9)):  # check non-zero z comp
         dotp = np.sum(rays.I_total * rays.k_vec, axis=1)
         if any(np.abs(dotp) > 1e-9):
-            print("Error in dot product too!")
+            print("Error in I dot product too!")
             print(dotp)
             print("max dot prod error", max(dotp))
         #print(rays.I_total)

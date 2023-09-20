@@ -43,7 +43,7 @@ E2 = np.array([0,1,1])
 E3 = np.array([-1,0,1])
 
 E_vec = np.vstack([E1,E2])#,E1,E2])
-E_vec = np.vstack([E1,E2,E3])
+E_vec = np.vstack([E1,E2,-E3])
 
 E_vec = E_vec.reshape(E_vec.shape[0], 3, 1)
 k_vec_norm = k_vec_norm.reshape(k_vec_norm.shape[0], 3, 1)
@@ -51,7 +51,8 @@ k_vec_norm = k_vec_norm.reshape(k_vec_norm.shape[0], 3, 1)
 # check
 print("dot product E and k", np.sum(k_vec_norm * E_vec, axis=1))
 
-N = np.array([0,0,-1]).reshape(1,3,1)
+N = np.array([0.3,0.4,-1]).reshape(1,3,1)
+N = normalize(N)
 
 print("k_vec_norm", k_vec_norm)
 # print(N)
@@ -60,14 +61,16 @@ p = np.cross(k_vec_norm, N, axis=1)  # get p vector (kxN)
 p = normalize(p)
 r = np.cross(k_vec_norm, p, axis=1)  # get r vector (kxp)
 r = normalize(r)
-print("p", p)
-print("r", r)
-print("p shape", r.shape)
-print("r shape", r.shape)
-print("r shape", r[0].shape)
-print("r norm", np.linalg.norm(r))
-print("p norm", np.linalg.norm(p))
+# print("p", p)
+# print("r", r)
+# print("p shape", r.shape)
+# print("r shape", r.shape)
+# print("r shape", r[0].shape)
+# print("r norm", np.linalg.norm(r))
+# print("p norm", np.linalg.norm(p))
 
+e_cross_k = np.cross(E_vec, k_vec_norm, axis=1)
+print("e_cross_k", e_cross_k)
 
 # basis vectors
 x = np.array([1,0,0]).reshape(1,3,1)
@@ -131,8 +134,12 @@ Es_ps = np.expand_dims(Es, axis=[0,3])
 kps = np.expand_dims(kps, axis=[0,3])
 
 Ep_ps_kz_xyz_ = (np.linalg.inv(M1) @ Ep_ps)
+# Ep_ps_kz_xyz_ = (M1 @ Ep_ps)
 Ep_ps_kz_xyz = Ep_ps_kz_xyz_.squeeze()
+
 Es_ps_kz_xyz = (np.linalg.inv(M1) @ Es_ps).squeeze()
+# Es_ps_kz_xyz = (M1 @ Es_ps).squeeze()
+
 
 print("r_prime", r_prime)
 print("x", x)
@@ -160,6 +167,7 @@ m2_unit = normalize(m2)#/np.linalg.norm(m2, axis=1).reshape(m2.shape[0],1,1)
 print("theta_m2", theta_m2)
 
 print("m2", m2)
+print("norm m2", m2_unit)
 print("sin_m2", sin_m2)
 
 m2_x = m2_unit[:,0]
@@ -177,6 +185,12 @@ M2M1_inv = np.linalg.inv(M2M1)
 
 E_ps = M2M1 @ E_vec
 E_zk = M1 @ E_vec
+
+Mf_1 = 1*np.identity(3)
+Mf = np.tile(Mf_1, (k_vec_norm.shape[0], 1))
+
+E_ps = Mf @ E_ps
+
 
 k_ps = M2M1 @ k_vec_norm
 k_zk = M1 @ k_vec_norm
@@ -218,9 +232,16 @@ print("Es_r_dot (should be 0)", Es_r_dot)
 print("k_z", k_zk)
 print("k_vec_norm", k_vec_norm)
 
+
 n_rays = (k_vec_norm.shape[0])
 
-fig = plt.figure()
+p1 = np.zeros((n_rays,3))
+p0 = p1 - k_vec_norm
+p2 = p0 + k_vec_norm
+
+fig = plt.figure()#
+fig2 = plt.figure()
+
 
 for i in range(n_rays):
     ax = fig.add_subplot(1,n_rays,i+1, projection='3d')
@@ -228,8 +249,8 @@ for i in range(n_rays):
     ax.quiver(0,0,0, Ep_ps_xyz[i,0], Ep_ps_xyz[i,1],Ep_ps_xyz[i,2], length=0.1)
     ax.quiver(0,0,0, k_vec_norm[i,0], k_vec_norm[i,1],k_vec_norm[i,2], color='green', length=0.1)
     ax.quiver(0,0,0, kps_xyz[i,0], kps_xyz[i,1], kps_xyz[i,2], color='purple', length=0.1, linestyle='dashed')
-    ax.quiver(0,0,0, kps_kz_xyz[i,0], kps_kz_xyz[i,1], kps_kz_xyz[i,2], color='yellow', length=0.1, linestyle='dashed')
-    ax.quiver(0,0,0, k_zk[i,0], k_zk[i,1], k_zk[i,2], color='orange', length=0.1, linestyle='dashed')
+    # ax.quiver(0,0,0, kps_kz_xyz[i,0], kps_kz_xyz[i,1], kps_kz_xyz[i,2], color='yellow', length=0.1, linestyle='dashed')
+    # ax.quiver(0,0,0, k_zk[i,0], k_zk[i,1], k_zk[i,2], color='orange', length=0.1, linestyle='dashed')
 
     ax.quiver(0,0,0, p[i,0], p[i,1], p[i,2], length=0.1, color='black')
     ax.quiver(0,0,0, r[i,0], r[i,1], r[i,2], length=0.1, color='black')
@@ -238,6 +259,10 @@ for i in range(n_rays):
     ax.quiver(0,0,0, Es_ps_kz_xyz[i,0], Es_ps_kz_xyz[i,1], Es_ps_kz_xyz[i,2], length=0.1, color='gray', linestyle='dashed')
 
     ax.set_aspect('equal')
+
+    ax2 = fig.add_subplot(1,n_rays,i+1, projection='3d')
+
+
 
 """
 idx = 2

@@ -111,7 +111,7 @@ class Detector():
             print("not enough points to plot pupil, skipping")
             return
         if caption:
-            caption_text = r'$Ix/Iy = %f$, $RCE = %f$' % (self.Iy_Ix_ratio, self.energy_ratio)
+            caption_text = r'$Ix/Iy = %.4f$, $RCE = %.4f$' % (self.Ix_Iy_ratio, self.energy_ratio)
         else:
             caption_text = None
         if max_r_in is None:

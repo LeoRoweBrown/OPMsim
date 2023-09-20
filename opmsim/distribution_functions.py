@@ -83,10 +83,14 @@ def uniform_mc_sampler(pdf, input_range, N, maxiter=10000, plot=True):
     return accepted_points
 
 def uniform_points_on_sphere(NA=1, point_count=5000,\
-    method='uniform_phi_inbetween'):
+    method='uniform_phi_inbetween', hemisphere=True):
     """ Get equal area elements in rings for uniform rays, also compute their area"""
 
-    N = point_count*2
+    if hemisphere:
+        N = point_count*2
+    else:
+        print("Full sphere generation")
+        N = point_count
 
     region_area = 4*np.pi/N
     theta_c = np.arccos(1- 2/N)
@@ -130,8 +134,9 @@ def uniform_points_on_sphere(NA=1, point_count=5000,\
     max_theta_idx = np.min(np.where(thetas > needed_max_theta))
 
     theta_scaling = needed_max_theta/thetas[max_theta_idx]
-    thetas *= theta_scaling
-    thetas = thetas[0:max_theta_idx+1]
+    if hemisphere:
+        thetas *= theta_scaling
+        thetas = thetas[0:max_theta_idx+1]
     N_rings = len(thetas)-1
 
     area_cap_scaled = np.pi*np.sin(thetas[0])*np.sin(thetas[0])
