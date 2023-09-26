@@ -5,6 +5,7 @@ import matplotlib.tri as tri
 from scipy.spatial import Delaunay
 from scipy.spatial import ConvexHull
 import matplotlib
+from matplotlib.patches import Circle
 
 import os
 
@@ -79,6 +80,7 @@ class PupilPlotObject():
             [abs(sorted_phi[i+1]-sorted_phi[i]) for i in range(len(sorted_phi)-1)]
         half_max_phi = max(diff_phi)/2
         max_r_reduced = max_r*np.cos(half_max_phi)
+        print("max_r_reduced", max_r_reduced, "max_r", max_r)
         if fill_zeroes:
             ## now create radius of zeroes
             #TODO: think about ways to stop bg points appearing outside the edges of the
@@ -137,7 +139,11 @@ class PupilPlotObject():
         else:
             pc1 = ax.tricontourf(list(x), list(y), data_x, cmap=cmap,\
                 levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-        plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
+        # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
+        #display_r = ax.transData.transform(max_r)
+        #Circle((display_r/2,display_r/2),display_r/2,zorder=-1)
+        circ = Circle((max_r, max_r), max_r, transform=ax.transAxes)
+        ax.add_patch(circ)
         ax.set_aspect('equal')
         ax.axis('off')
         ax.set_title("X component intensity")
@@ -179,7 +185,8 @@ class PupilPlotObject():
         fig.text(.5, -0.05, caption_text, ha='center', fontsize=14)
 
         fig.tight_layout()
-
+        plt.autoscale(True)
+        plt.show()
         self.figure = fig
         return fig, (pc1, pc2, pc3)
 
@@ -192,6 +199,10 @@ class PupilPlotObject():
         self.figure.savefig(save_dir, bbox_inches='tight')
 
 def heatmap_plot(x0, y0, data_x, data_y, title=""):
+    if len(x0) < 4:
+        print("Insufficient points to plot heatmap")
+        return
+
     fig = plt.figure(figsize=[10,3]) 
 
     max_for_scale = np.max([np.max(data_x), np.max(data_y)])

@@ -109,7 +109,7 @@ class DipoleSource:
         
 
     def generate_dipoles(self, dipole_count, lda_ex=500e-9, lda_em=500e-9, method='uniform',
-        show_prints=False, plot=True):
+        show_prints=False, plot=False):
         """ 
         Generate (default: randomly) distriubted dipoles with same wavelength
         doesn't support beta, slow tumbling etc.
@@ -134,7 +134,9 @@ class DipoleSource:
             raise ValueError("Only supports 'random' or 'uniform' distriubted dipoles")
 
         self.n_dipoles = len(self.phi_d)
-        self.density = np.append(self.density, np.ones(self.n_dipoles))
+        self.density = np.ones(len(self.phi_d))
+        # print("self.n_dipoles", self.n_dipoles)
+        # print("self.density", len(self.density))
         # self.lda_em = np.append(self.lda_em, np.ones(self.n_dipoles)*lda_em)
 
         ## plot to verify distribution
@@ -234,9 +236,12 @@ class DipoleSource:
 
     def plot_distribution(self, alphas=[]):
         # plot on sphere - maybe move this plotting somewhere more elegant
-        x = np.cos(self.alpha_d)*np.sin(self.phi_d)
+        x = np.cos(self.alpha_d)*np.sin(self.phi_d) # TODO: IS THIS RIGHT? alpha_d=0 phi_d=0 should be x=1
         y = np.cos(self.alpha_d)*np.cos(self.phi_d)
         z = np.sin(self.alpha_d)
+
+        phi_exc, alpha_exc = self.excitation_polarisation
+        x_ex = np.cos(alpha_exc)*np.sin(phi_exc)
 
         facec_ = np.asarray(np.tile([0,0,0,0], [len(x),1]), dtype=np.float64)
         edgec_ = np.asarray(np.tile([0,0,0,1], [len(x),1]), dtype=np.float64)
@@ -378,7 +383,7 @@ class DipoleSource:
         plt.show()
 
     def get_rays_uniform_rings(self, NA, f, ray_count=5000,\
-        method='uniform_phi_inbetween', plot_sphere=True):
+        method='uniform_phi_inbetween', plot_sphere=False):
         """ Get equal area elements in rings for uniform rays, also compute their area"""
 
         phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(

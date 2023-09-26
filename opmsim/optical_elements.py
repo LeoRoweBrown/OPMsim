@@ -5,6 +5,7 @@ import scipy.interpolate as interp
 from matplotlib import pyplot as plt
 import matplotlib
 import os
+from math import ceil
 
 from .tools import graphics
 from . import optical_matrices
@@ -327,11 +328,12 @@ class DiagonalMatrix():
         return rays
 
 class WavePlate():
-    def __init__(self, psi, delta, update_history=False):
+    def __init__(self, psi, delta, update_history=False,plot_debug=False):
         self.type = 'WavePlate'
         self.psi = psi  # angle of fast axis from x axis
         self.delta = delta  # amount of retardation e.g delta=pi/2 for qwp
         self.update_history = update_history
+        self.plot_debug = plot_debug
 
     def apply_matrix(self, rays, update_history=False):
         if self.update_history: rays.update_history()
@@ -340,63 +342,24 @@ class WavePlate():
         # rays.k_vec = optical_matrices.wave_plate(self.psi, self.delta) @ rays.k_vec
         # E_before = rays.transfer_matrix @ rays.E_vec
         #rays_, E_vec_ = 
-        print("----------------------Electric field before waveplate------------------")
-        rays.quiver_plot(downsampling=1, n_rays = None)
+        if self.plot_debug:
+            print("----------------------Electric field before waveplate------------------")
+            rays.quiver_plot(downsampling=1, n_rays = None)
         rays.transfer_matrix = \
             optical_matrices.wave_plate(self.psi, self.delta) @ rays.transfer_matrix
-        print("----------------------Electric field after waveplate------------------")
-        rays.quiver_plot(downsampling=1, n_rays = None)    
+        if self.plot_debug:
+            print("----------------------Electric field after waveplate------------------")
+            rays.quiver_plot(downsampling=1, n_rays = None)    
 
-        x0_all = rays.rho*np.cos(rays.phi)
-        y0_all = rays.rho*np.sin(rays.phi)
-        x0 = x0_all[np.invert(rays.escaped)]
-        y0 =y0_all[np.invert(rays.escaped)]
-        E_vec = rays.transfer_matrix @ rays.E_vec
-        # print("E tf resid", (E_vec - E_tf))
-        #E_vec = E_vec[:,:,:,0]
-        E_vec_all = E_vec.reshape((E_vec.shape[0], E_vec.shape[1], 3))
-        E_vec = E_vec_all[:,np.invert(rays.escaped),:]
-        # print("not escaped", np.invert(rays.escaped))
-        print("all shape", E_vec_all.shape)
-        print("shape", E_vec.shape)
-        # plt.figure()
-        # plt.scatter(E_vec[:, :, 0].real, E_vec[:, :, 1].real)
-        # plt.title("scatter for E real component (in waveplate)")
-        # plt.show()
-        # plt.figure()
-        # plt.scatter(E_vec[:, :, 0].imag, E_vec[:, :, 1].imag)
-        # plt.title("scatter for E imag component (in waveplate)")
-        # plt.show()
-        # plt.figure()
-        # plt.scatter(E_vec[:, :, 0]*np.conj(E_vec[:, :, 0]), E_vec[:, :, 1]*np.conj(E_vec[:, :, 1]))
-        # plt.title("scatter for E modulus component (in waveplate)")
-        # plt.show()
-
-        #plt.figure
-        #plt.scatter(np.real(E_vec[0,:,0,0]),np.real(E_vec[0,:,1,0]))
-        #plt.show()
-        #plt.figure
-        #plt.scatter(np.imag(E_vec[0,:,0,0]),np.imag(E_vec[0,:,1,0]))
-        #plt.show()
-        ################################################################
-        # plot triangulated heatmap (initial field) without using phi and stuff for debugging
-        # fig = plt.figure(figsize=[10,3])
-        # ax = fig.add_subplot(131)
-        # E_width = 0.005
-        # width = 0.005
-        # ax.scatter(x0,y0)
-        # ax.quiver(x0,y0, E_vec[:, :, 0].real, E_vec[:, :, 1].real, color='g', width=E_width, scale=10)
-        # ax.quiver(x0,y0, E_vec[:, :, 0].imag, E_vec[:, :, 1].imag, color='purple', width=E_width, scale=10)
-        # ax.set_aspect('equal')
-        # plt.title("waveplate quiver")
-        # plt.show()
-
-        data_x =  np.real(E_vec[0,:,0]*np.conj(E_vec[0,:,0]))
-        data_y =  np.real(E_vec[0,:,1]*np.conj(E_vec[0,:,1]))
-        # plt.figure
-        # plt.scatter(data_x,data_y)
-        # plt.show()
-        graphics.heatmap_plot(x0, y0, data_x, data_y, title="Intensity field after QWP")
+            x0_all = rays.rho*np.cos(rays.phi)
+            y0_all = rays.rho*np.sin(rays.phi)
+            x0 = x0_all[np.invert(rays.escaped)]
+            y0 =y0_all[np.invert(rays.escaped)]
+            
+            E_vec = rays.transfer_matrix @ rays.E_vec
+            data_x =  np.real(E_vec[0,:,0]*np.conj(E_vec[0,:,0]))
+            data_y =  np.real(E_vec[0,:,1]*np.conj(E_vec[0,:,1]))
+            graphics.heatmap_plot(x0, y0, data_x, data_y, title="Intensity field after QWP")
 
         return rays
 
@@ -406,13 +369,15 @@ class IdealFlatMirrorNoRotation():
 class FlatMirror():
     """
     Flat mirror with rotation about y axis
+    TODO: make fast version of this without all the tracing and such..
     """
     def __init__(self, rot_y, film_thickness=100e-9, 
         n_film_file='../refractive_index_data/SiO.txt', 
         n_metal_file='../refractive_index_data/Ag.txt', 
         retardance=True, perfect_mirror=False, update_history=False,
         fresnel_debug_savedir = None,
-        reflectance=1):
+        reflectance=1,
+        plot_debug=False):
 
         self.type = 'FlatMirror'
         self.mirror_type = 'perfect'  # e.g. fresnel, protected
@@ -430,6 +395,7 @@ class FlatMirror():
         # self.delta_x = 0  # rotation in x
         self.fresnel_debug_savedir = fresnel_debug_savedir
         self.update_history = update_history
+        self.plot_debug = plot_debug
 
     def normalize(self, v, axis=1):
         norm = np.linalg.norm(v, axis=axis).reshape(v.shape[0],1,1)
@@ -438,6 +404,10 @@ class FlatMirror():
     
     def heatmap_plot(self, x0, y0, data_x, data_y, title=""):
         fig = plt.figure(figsize=[10,3]) 
+
+        if len(x0) < 4:
+            print("Insufficient points to plot heatmap")
+            return
 
         max_for_scale = np.max([np.max(data_x), np.max(data_y)])
         min_for_scale = np.min([np.min(data_x), np.min(data_y)])
@@ -489,9 +459,9 @@ class FlatMirror():
         fig.suptitle(title)
 
     def apply_matrix(self, rays):
-        print("----------------------Electric field before reflection------------------")
-
-        rays.quiver_plot(downsampling=1, n_rays = None)
+        if self.plot_debug:
+            print("----------------------Electric field before reflection------------------")
+            rays.quiver_plot(downsampling=1, n_rays = None)
         ##
         # rotate out of meridional plane
         if rays.isMeridional:  # put back into non meridional basis
@@ -525,7 +495,7 @@ class FlatMirror():
         ################################################################
 
         k_vec_norm = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1, 1)
-
+        # print("k_vec_norm", k_vec_norm)
         p0 = np.array([x0, y0, z0]).T
         p_contact = p0 + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm.squeeze())
 
@@ -535,7 +505,11 @@ class FlatMirror():
         N = N/np.linalg.norm(N)
         N = N.reshape(1,3,1)
 
-        p = np.cross(k_vec_norm, N, axis=1)  # get p vector (kxN) (s wave comp unit?)
+        p = np.cross(k_vec_norm, N, axis=1)  # get p vector (kxN) (s wave comp unit?)#
+        kdotN = np.sum(k_vec_norm * N, 1)
+        # print("kdotN", kdotN)
+        np.abs(kdotN.squeeze())  
+
         r = np.cross(k_vec_norm, p, axis=1)  # get r vector (kxp) (p wave comp unit?)
 
         # normalize since we compute the angles without the normalization factor...
@@ -547,15 +521,20 @@ class FlatMirror():
         parallel = r[:,:,0]
         senkrecht = p[:,:,0]
 
+        # print("parallel", parallel)
+
         ps_project = optical_matrices.ps_projection_matrix(parallel, senkrecht, np.squeeze(rays.k_vec))
+        ps_project_inv2 = optical_matrices.ps_projection_matrix(parallel, senkrecht, np.squeeze(rays.k_vec), inverse=False)
 
         M_fresnel_test = np.array([
             [0.95,0,0],
             [0,0.8,0],
             [0,0,0]
         ])
+        # print(ps_project)
         inv_ps_proj = np.linalg.inv(ps_project)
-  
+        # print("equal invs?", np.array_equal(ps_project_inv2, inv_ps_proj))
+         #print(ps_project_inv2-ps_project_inv2)
         #### ----------------------------------------------------------------------------------------- ####
         ###################################################################################################
 
@@ -673,8 +652,9 @@ class FlatMirror():
         k_vec_norm_out = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1,1)
         p_out = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm_out.squeeze())
 
-        p_out = p_out.squeeze()
-        p_contact = p_contact.squeeze()
+        if rays.k_vec.shape[0] > 1:
+            p_out = p_out.squeeze()
+            p_contact = p_contact.squeeze()
 
         xline1 = np.array([x0, p_contact[:,0]]).T
         yline1 = np.array([y0, p_contact[:,1]]).T
@@ -708,7 +688,7 @@ class FlatMirror():
         color = cm.rainbow(np.linspace(0, 1, 10))
         n_rays = 10
         len_line = len(xline1)
-        idxs = range(0,len_line,int(len_line/10))
+        idxs = range(0,len_line,ceil(len_line/10))
         if len(idxs)>n_rays:
             idxs = idxs[0:-1]
         for i, n in enumerate(idxs):
@@ -736,3 +716,4 @@ class PerfectRightAngleMirror(Element):
 
     def apply_matrix(self, rays):
         rays.optical_axis += np.pi/2
+

@@ -1,0 +1,370 @@
+def apply_matrix(self, rays):
+        print("----------------------Electric field before reflection------------------")
+
+        rays.quiver_plot(downsampling=1, n_rays = None)
+        ##
+        # rotate out of meridional plane
+        if rays.isMeridional:  # put back into non meridional basis
+            rays.meridional_transform(inverse=True)
+        
+        if self.update_history: rays.update_history()
+
+        # starting field
+        initial_E_vec_4d = (rays.transfer_matrix @ rays.E_vec)#.squeeze()
+        # print(initial_E_vec.shape)
+        initial_E_vec = initial_E_vec_4d[0,:,:,0]
+        # print(initial_E_vec.shape)
+
+        # initial_E_vec = np.sum(initial_E_vec, axis=0)
+        
+        rho_0 = rays.rho_before_trace
+        z_dist = abs(rho_0/np.tan(rays.theta))
+        dist_r = abs(z_dist/np.cos(rays.theta))
+        dist_r = abs(rho_0/np.sin(rays.theta))
+        # all r are the same, use for theta =0
+        z_dist[rays.theta < 1e-6] = dist_r[-1]
+        dist_r[rays.theta < 1e-6] = dist_r[-1]
+        
+        x0 = rho_0*np.cos(rays.phi)
+        y0 = rho_0*np.sin(rays.phi)
+        z0 = abs(dist_r)*(1-np.cos(rays.theta))
+        # z0 = np.zeros_like(rays.phi)
+
+        ################################################################
+        # plot triangulated heatmap (initial field) without using phi and stuff for debugging
+        data_x =  np.real(initial_E_vec[:,0]*np.conj(initial_E_vec[:,0]))
+        data_y =  np.real(initial_E_vec[:,1]*np.conj(initial_E_vec[:,1]))
+        
+        self.heatmap_plot(x0, y0, data_x, data_y, title="Initial field")
+
+        ################################################################
+
+        k_vec_norm = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1, 1)
+
+        p0 = np.array([x0, y0, z0]).T
+        p_contact = p0 + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm.squeeze())
+
+        x0t = np.zeros_like(rays.phi)
+        y0t = np.zeros_like(rays.phi)
+        z0t = np.zeros_like(rays.phi)
+        p0_2 = np.array([x0t, y0t, z0t]).reshape(x0.shape[0], 3)
+        p0_2 = p0
+
+        p_contact_2 = p0_2 + dist_r.reshape(dist_r.shape[0], 1)*(rays.k_vec.squeeze())
+
+        print(self.rot_y)
+        # get N vector
+        N = np.array([-np.tan(self.rot_y), 0, -1])
+        N = N/np.linalg.norm(N)
+        N = N.reshape(1,3,1)
+        k_vec = np.real(rays.k_vec)
+
+        p = np.cross(k_vec_norm, N, axis=1)  # get p vector (kxN) (s wave comp unit?)
+        r = np.cross(k_vec_norm, p, axis=1)  # get r vector (kxp) (p wave comp unit?)
+
+        # normalize since we compute the angles without the normalization factor...
+        p = self.normalize(p)  
+        r = self.normalize(r)
+
+        ###################################################################################################
+        #### ------------------------------------New method------------------------------------------- ####
+        parallel = r[:,:,0]
+        senkrecht = p[:,:,0]
+
+        ps_project = optical_matrices.ps_projection_matrix(parallel, senkrecht, np.squeeze(rays.k_vec))
+        print(ps_project.shape)
+        k_vec_ps = ps_project @ rays.k_vec
+        print("k_vec_ps, should be just 0,0,1", k_vec_ps)
+        E_ps_proj = ps_project @ initial_E_vec_4d
+        print("E_vec_ps, should be Ep,Es,0", E_ps_proj)
+        M_fresnel_test = np.array([
+            [0.95,0,0],
+            [0,0.8,0],
+            [0,0,0]
+        ])
+        inv_ps_proj = np.linalg.inv(ps_project)
+
+        
+        E_fresnelled = inv_ps_proj @ M_fresnel_test @ E_ps_proj
+
+        Ekvec_dot = (np.sum(E_fresnelled[0,:,:] * rays.k_vec, axis=1))
+  
+        #### ----------------------------------------------------------------------------------------- ####
+        ###################################################################################################
+
+        # basis vectors
+        x = np.array([1,0,0]).reshape(1,3,1)
+        y = np.array([0,1,0]).reshape(1,3,1)
+        z = np.array([0,0,1]).reshape(1,3,1)
+
+        # first rotation matrix:
+        m1 = np.cross(z, k_vec_norm, axis=1)
+        sin_m1 = np.linalg.norm(m1, axis=1)
+        theta_m1 = np.arcsin(sin_m1)
+
+        m1_unit = self.normalize(m1, axis=1)
+        # print("m1", m1)
+
+        m1_x = m1_unit[:,0]
+        m1_y = m1_unit[:,1]
+        m1_z = m1_unit[:,2]
+
+        M1 = optical_matrices.arbitrary_rotation(theta_m1, m1_x,m1_y,m1_z)
+        M1 = M1.reshape(M1.shape[0],3,3)
+        M1_inv = np.linalg.inv(M1)
+
+        r_prime = M1 @ r
+        p_prime = M1 @ p
+        x_prime = M1 @ x
+
+        Ep = np.tile([1,0,0], (k_vec_norm.shape[0], 1))
+        Es = np.tile([0,1,0], (k_vec_norm.shape[0], 1))
+        kps = np.tile([0,0,1], (k_vec_norm.shape[0], 1))
+        Ep_ps = np.expand_dims(Ep, axis=[0,3])
+        Es_ps = np.expand_dims(Es, axis=[0,3])
+        kps = np.expand_dims(kps, axis=[0,3])
+
+        print("Ep_ps shape", Ep_ps.shape)
+
+        Ep_ps_kz_xyz_ = (np.linalg.inv(M1) @ Ep_ps)
+        Ep_ps_kz_xyz = Ep_ps_kz_xyz_.squeeze()
+        Es_ps_kz_xyz = (np.linalg.inv(M1) @ Es_ps).squeeze()
+
+        m2 = np.cross(r_prime, x, axis=1)
+        # m2 = np.cross(r, x_inv_prime, axis=1)
+        # m2 = np.cross(Ep, x)
+
+        sin_m2 = np.linalg.norm(m2, axis=1)
+        theta_m2 = np.arcsin(sin_m2)
+        m2_unit = self.normalize(m2)#/np.linalg.norm(m2, axis=1).reshape(m2.shape[0],1,1)
+
+        m2_x = m2_unit[:,0]
+        m2_y = m2_unit[:,1]
+        m2_z = m2_unit[:,2]
+
+        # rotation matrix 2
+        old_rays_phi = rays.phi
+        #pi_mask = np.logical_and(old_rays_phi > np.pi/2, old_rays_phi < 3*np.pi/2)
+        #theta_m2[pi_mask] = -theta_m2[pi_mask]
+        phi_atan2 = np.arctan2(rays.k_vec[:,1], rays.k_vec[:,0])
+        sign = np.cos(phi_atan2)/np.abs(np.cos(phi_atan2))
+        theta_m2 *= sign
+
+        M2 = optical_matrices.arbitrary_rotation(theta_m2, m2_x,m2_y,m2_z)
+        M2 = M2.reshape(M2.shape[0],3,3)
+
+        M2M1 = M2 @ M1
+
+        M2_inv = np.linalg.inv(M2)
+        M2M1_inv = np.linalg.inv(M2M1)
+
+        N_ps = M2M1 @ N
+        k_ps = M2M1 @ rays.k_vec
+
+        kxN = np.cross(N_ps, k_ps, axis=1)
+        sin_mr_1theta = np.linalg.norm(abs(kxN), axis=1)
+        theta_i = np.arcsin(sin_mr_1theta)
+
+        if self.perfect_mirror:
+            M_fresnel = np.identity(3)
+            M_fresnel *= self.reflectance
+        else:
+            M_fresnel = np.array([
+                [1,0,0],
+                [0,1,0],
+                [0,0,0]
+            ])
+            M_fresnel = optical_matrices.protected_mirror_fresnel_matrix(
+                theta_i, self.n_film_data, self.film_thickness, self.n_metal_data, rays.lda)
+            
+            M_fresnel_real = M_fresnel.real
+            M_fresnel_real_sign = M_fresnel_real/M_fresnel_real - 2*(M_fresnel_real<0)
+            M_fresnel_real_abs = np.abs(M_fresnel_real)
+
+            M_fresnel_imag = M_fresnel.imag
+            M_fresnel_img_sign = M_fresnel_imag/M_fresnel_imag - 2*(M_fresnel_imag<0)
+            M_fresnel_img_abs = np.abs(M_fresnel_imag)
+            # test -- to remove
+            # M_fresnel = np.sqrt(M_fresnel * np.conj(M_fresnel))
+        
+
+        reflection_mat = optical_matrices.reflection_cartesian_matrix(N.squeeze())
+
+        rays.transfer_matrix = reflection_mat @ M2M1_inv @ M_fresnel @ M2M1 @ rays.transfer_matrix 
+        # rays.transfer_matrix = reflection_mat @ rays.transfer_matrix 
+        k_vec_ref =  reflection_mat @ rays.k_vec
+        # k_vec_ref =  reflection_mat @ M2M1_inv @ M_fresnel @ M2M1 @ rays.k_vec
+        print("----------------------Electric field after reflection------------------")
+        rays.quiver_plot(downsampling=1, n_rays = None)
+
+        E_out2 = rays.transfer_matrix @ rays.E_vec
+        E_ps_in = M2M1 @ initial_E_vec_4d
+        E_ps_out =  M_fresnel @ M2M1 @ initial_E_vec_4d
+
+        E_out_perf = reflection_mat @ initial_E_vec_4d
+
+        Ein_p = initial_E_vec_4d[0,:,:,0]*p  # perp component
+        Ein_r = initial_E_vec_4d[0,:,:,0]*r  # parallel component
+
+        print("r p are crossed", np.all(r*p , 1e-16))
+        Eout_p = E_out_perf[0,:,:,0]*p  # parallel component
+        Eout_r = E_out_perf[0,:,:,0]*r  # parallel component
+        print("E out and k out are crossed", np.all(E_out_perf[0,:,:] * k_vec_ref , 1e-16))
+        
+
+        E_ps_in = E_ps_in[0,:,:,0]
+        E_ps_out = E_ps_out[0,:,:,0]
+        E_in = initial_E_vec
+        E_out = E_out2[0,:,:,0]
+
+        if self.fresnel_debug_savedir and not self.perfect_mirror:
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_in.csv"), E_ps_in)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_in.csv"), E_in)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_out.csv"), E_in)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "theta.csv"), theta_i)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "M_fresnel.csv"), M_fresnel.reshape(M_fresnel.shape[0], 9))
+
+        rays.k_vec = k_vec_ref
+
+        ############   ############################################
+        ############ CHECK THIS ############################################
+        # rays.k_vec[:,2] = -rays.k_vec[:,2]  # dont worry about handedness? necessary for simulation to work -- otherwise E and k matrices need to be diff?
+
+        # now UN-fold the system to play nice with the tranformation matrices #
+        #############################################################################################
+        # This needs checking, I assume it is okay but need to verify it gets the same result i.e.  #
+        # find another way of doing this without unfolding and compare the result... or manually    #
+        # trace ray?                                                                                #
+        #############################################################################################
+
+        flip_mat = optical_matrices.flip_axis(2)
+        rays.transfer_matrix = flip_mat @ rays.transfer_matrix
+        rays.k_vec = flip_mat @ rays.k_vec
+        rays.negative_kz = True
+
+        #############################################################################################
+
+        kz_gt_1_mask = np.squeeze(rays.k_vec[:,2] > 1)
+        rays.theta[kz_gt_1_mask] = 0
+        if rays.k_vec.shape[0] < 2:  # very annoying edge case when size is 1,3,1 still don't really understand it
+            #if kz_gt_1_mask:
+            kz_gt_1_mask = np.reshape(kz_gt_1_mask, (1,))
+        rays.k_vec[kz_gt_1_mask, 2] = 1
+
+        rays.theta = np.arccos(rays.k_vec[:,2]).flatten()
+
+        # MINUS ON PHI TO REPRESENT HANDEDNESS CHANGE
+        rays.phi = np.arctan2(rays.k_vec[:,1], rays.k_vec[:,0]).flatten()
+        
+        merid = optical_matrices.meridional_transform_tensor(rays.phi, inverse=False)
+        E_out2_merid = merid @ E_out2
+        merid_inv = optical_matrices.meridional_transform_tensor(rays.phi, inverse=True)
+        E_out2_m = merid_inv @ E_out2_merid
+        E_out2_m = E_out2_m[0,:,:,0]
+
+        # compare polar to cartesian
+        x = np.sin(rays.theta)*np.cos(rays.phi)
+        y = np.sin(rays.theta)*np.sin(rays.phi)
+        z = np.cos(rays.theta)
+
+        ax0 = plt.figure().add_subplot(projection='3d')
+        ax0.plot(x,y,z)
+
+        ax1 = plt.figure().add_subplot(projection='3d')
+        ax1.plot(rays.k_vec[:,0], rays.k_vec[:,1], rays.k_vec[:,2])
+
+        ###############################################################
+        # plot triangulated heatmap (reflected field) for debugging
+        data_x =  np.real(E_out2_m[:,0]*np.conj(E_out2_m[:,0]))
+        data_y =  np.real(E_out2_m[:,1]*np.conj(E_out2_m[:,0]))
+        
+        self.heatmap_plot(x, y, data_x, data_y, title="Reflected field")
+
+        ################################################################
+
+        k_vec_norm_out = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1,1)
+        p_out = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm_out.squeeze())
+        p_out_ref = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_ref.squeeze())
+
+        p_out = p_out.squeeze()
+        p_contact = p_contact.squeeze()
+        p_contact = p_contact_2
+
+        # print(x0.shape)
+        # print(p_contact.shape)
+        # print(p_contact[0].shape)
+        x_points = np.array([x0, p_contact[:,0], p_out[:,0]])
+        y_points = [y0, p_contact[:, 1], p_out[:, 1]]
+        z_points = [z0, p_contact[:,2], p_out[:, 2]]
+
+        x_normal_line = [p_contact[0,0], p_contact[0,0] + dist_r[0]*N[0,0,0]]
+        y_normal_line = [p_contact[0,1], p_contact[0,1] + dist_r[0]*N[0,1,0]]
+        z_normal_line = [p_contact[0,2], p_contact[0,2] + dist_r[0]*N[0,2,0]]
+
+         #print("N", N[0,0,0], N[0,1,0], N[0,2,0])
+
+        xline1 = np.array([x0, p_contact[:,0]]).T
+        yline1 = np.array([y0, p_contact[:,1]]).T
+        zline1 = np.array([z0, p_contact[:,2]]).T
+
+        xline2 = np.array([p_contact[:,0], p_out[:,0]]).T
+        yline2 = np.array([p_contact[:,1], p_out[:,1]]).T
+        zline2 = np.array([p_contact[:,2], p_out[:,2]]).T
+
+        xline2r = np.array([p_contact[:,0], p_out_ref[:,0]]).T
+        yline2r = np.array([p_contact[:,1], p_out_ref[:,1]]).T
+        zline2r = np.array([p_contact[:,2], p_out_ref[:,2]]).T
+
+        Ep_xyz = M2M1_inv @ Ep_ps
+        Es_xyz = M2M1_inv @ Es_ps
+        print("Ep_xyz.shape", Ep_xyz.shape)
+        Ep_xyz = Ep_xyz[0,:,:,0]
+        Es_xyz = Es_xyz[0,:,:,0]
+
+        Ep_r_dot = np.sum(Ep_xyz.squeeze() * r.squeeze(), axis=1)/np.linalg.norm(Ep_xyz, axis=1)
+        print("Ep_r_dot (should be 1)", Ep_r_dot)
+        x_over_y = rays.k_vec[:,0,:]/rays.k_vec[:,1,:]
+        # print("k_vec x/y", rays.k_vec[:,0,:]/rays.k_vec[:,1,:])
+        Es_r_dot = np.sum(Es_xyz.squeeze() * r.squeeze(), axis=1)/np.linalg.norm(Es_xyz, axis=1)
+        print("Es_r_dot (should be 0)", Es_r_dot)
+
+        Es_not_perp = (abs(Es_r_dot) > np.finfo(Es_r_dot.dtype).eps)
+        print(Es_not_perp.shape)
+        print(rays.E_vec.shape)
+        print(rays.k_vec.shape)
+        print("Not perp E", rays.E_vec[0,Es_not_perp,:,0])
+
+        print("Not perp k", rays.k_vec[Es_not_perp,:])
+
+        print("Not perp phi", rays.phi[Es_not_perp])
+        print("Not perp theta", rays.theta[Es_not_perp])
+
+        fig_dot = plt.figure()
+        plt.scatter(old_rays_phi, abs(Ep_r_dot))
+        plt.show()
+
+        ax = plt.figure().add_subplot(projection='3d')
+
+        # for n in range(xline1.shape[0]):
+        from matplotlib.pyplot import cm
+        color = cm.rainbow(np.linspace(0, 1, 10))
+        n_rays = 10
+        len_line = len(xline1)
+        idxs = range(0,len_line,int(len_line/10))
+        if len(idxs)>n_rays:
+            idxs = idxs[0:-1]
+        for i, n in enumerate(idxs):
+            ax.plot(xline1[n], yline1[n], zline1[n], linestyle='solid', color=color[i])#, color='green')
+            ax.plot(xline2[n], yline2[n], zline2[n], linestyle='dashed', color=color[i])#, color='blue')
+
+            # coord axis
+            ax.quiver(x0[n], y0[n], z0[n], Ep_xyz[n,0], Ep_xyz[n,1], Ep_xyz[n,2], length=0.001, color='blue')
+            ax.quiver(x0[n], y0[n], z0[n], Es_xyz[n,0], Es_xyz[n,1], Es_xyz[n,2], length=0.001, color='blue')
+
+            ax.quiver(p_contact[n,0],p_contact[n,1], p_contact[n,2], p[n,0], p[n,1], p[n,2],color=color[i], length=0.001)
+            ax.quiver(p_contact[n,0],p_contact[n,1], p_contact[n,2], r[n,0], r[n,1], r[n,2],color=color[i], length=0.001)
+            ax.set_aspect('equal')
+
+        return rays

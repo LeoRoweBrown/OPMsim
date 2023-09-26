@@ -66,12 +66,12 @@ class Detector():
         self.ray_phi = np.asarray(self.ray_phi, dtype=np.float64)
 
         # plot radii to debug
-        fig = plt.figure()
-        plt.plot(self.ray_polar_radius)
-        plt.title("ray radii on polar plot")
-        plt.xlabel("ray number in list")
-        plt.ylabel("radius")
-        plt.show()
+         #fig = plt.figure()
+         #plt.plot(self.ray_polar_radius)
+         #plt.title("ray radii on polar plot")
+         #plt.xlabel("ray number in list")
+         #plt.ylabel("radius")
+        # plt.show()
 
         phi_1d = self.ray_phi.squeeze()
         self.unstructured_x = self.ray_polar_radius*np.cos(phi_1d)
@@ -114,15 +114,16 @@ class Detector():
             caption_text = r'$Ix/Iy = %.4f$, $RCE = %.4f$' % (self.Ix_Iy_ratio, self.energy_ratio)
         else:
             caption_text = None
-        if max_r_in is None:
+        if max_r_in is 'max_r':
             max_r_in = self.max_r
+
         pupil = graphics.PupilPlotObject(
             self.unstructured_x, self.unstructured_y,
             self.Ix_area_scaled, self.Iy_area_scaled)
-        pupil.plot(title, show_prints, plot_arrow,
+        fig, pc = pupil.plot(title, show_prints, plot_arrow,
             fill_zeroes, scale_range, rotate_90, caption_text, max_r_in)
         # self.pupil = pupil
-        return pupil
+        return fig# pupil
 
     def get_final_polar_coords(self, rays, curved):
         """polar plot does not deal with negative radii, r=theta or rho"""

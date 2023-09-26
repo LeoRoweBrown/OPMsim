@@ -5,11 +5,11 @@ import time
 from memory_profiler import profile
 import warnings
 
-
 from .detector import Detector
 from . import dipole_source
 from . import optical_elements
 from .tools import graphics
+from . import anisotropy
 
 def count_lenses(elements):
     count = 0
@@ -68,12 +68,14 @@ def trace_rays(elements, source, options):
     ky = np.sin(rays.theta)*np.sin(rays.phi)
     kz = np.cos(rays.theta)
 
-    # for plotting with limiting NA
-    element = elements[-1]
-    i=0
-    while element.type != 'SineLens':
-        element = elements[-1-i]
-        i += 1
+    # for plotting with limiting NA  -- maybe check this, seems to use last NA
+    # element = elements[-1]
+    # i=0
+    # changed, use first NA to define the boundary..
+    # while element.type != 'SineLens':
+    #     element = elements[-1-i]
+    #     i += 1
+    element = elements[0]
     detector.limiting_NA = element.NA
     detector.limiting_D = element.D
     if is_curved_pupil:
@@ -82,6 +84,8 @@ def trace_rays(elements, source, options):
     else:
         detector.max_r = element.D/2
 
+    # maybe move this to detector? No harm done though
+    print("Limiting radius for detector:", detector.max_r)
     print("Energy ratio (efficiency):", rays.final_energy/np.sum(rays.initial_energy))
     print("Total energy:", rays.final_energy)
     print("Total energy per dipole:", rays.final_energy/source.n_dipoles)
@@ -97,7 +101,9 @@ def trace_rays(elements, source, options):
     print("Energy from Iy", Energy_y)
     print("X/Y energy ratio =", detector.Ix_Iy_ratio)
     
-
+    # -----------------------------------------------
+    
+    # checking for cases where E not perpendicular with k (something went wrong)
     if any(np.abs(rays.I_total[:,2] > 1e-9)):  # check non-zero z comp
         dotp = np.sum(rays.I_total * rays.k_vec, axis=1)
         if any(np.abs(dotp) > 1e-9):

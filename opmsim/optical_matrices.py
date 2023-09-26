@@ -119,20 +119,33 @@ def wave_plate(psi, delta):
 def diagonal(value=1):
     return value*np.identity(3)
 
-def ps_projection_matrix(p, s, k_vec):
+def ps_projection_matrix(p, s, k_vec, inverse=False):
     """project E onto p and s component in reflection, p = k1 x N, s = k1 x p"""
     # for loop instead of vectorise just for safety.. reshape likes to muddle up elements
     ps_projection = np.zeros((p.shape[0], 3, 3))
+
+    if k_vec.ndim < 2:
+        k_vec = np.expand_dims(k_vec, 0)
+    if p.ndim < 2:
+        p = np.expand_dims(p, 1)
+
     print(p.shape)
     print(p[0,0].shape)
     print(k_vec[0,0].shape)
     print(k_vec.shape)
+
     for n in range((p.shape[0])):
-        ps_projection[n, :, :] = np.array([
-            [p[n,0], p[n,1], p[n,2]],
-            [s[n,0], s[n,1], s[n,2]],
-            [k_vec[n,0], k_vec[n,1], k_vec[n,2]]
-        ])
+
+        if(np.all(np.equal(p[n,:], 0))):
+            ps_projection[n, :, :] = np.identity(3)
+        else:
+            ps_projection[n, :, :] = np.array([
+                [p[n,0], p[n,1], p[n,2]],
+                [s[n,0], s[n,1], s[n,2]],
+                [k_vec[n,0], k_vec[n,1], k_vec[n,2]]
+            ])
+        if inverse:
+            ps_projection[n, :, :] = np.linalg.inv(ps_projection[n, :, :])
     return ps_projection
 
 # def ps_projection_matrix(p, s, k_vec):

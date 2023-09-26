@@ -94,10 +94,10 @@ class PolarRays:
             #theta = self.theta
         # method 2:
         # theta = self.theta % (np.pi/2)
-        plt.figure()
-        plt.plot(theta)
-        plt.title("theta before local basis")
-        plt.show()
+        # plt.figure()
+        # plt.plot(theta)
+        # plt.title("theta before local basis")
+        # plt.show()
 
         basis_tensor = optical_matrices.rotate_basis_tensor(
             self.phi, theta, inverse_basis)

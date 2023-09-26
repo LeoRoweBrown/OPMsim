@@ -10,6 +10,15 @@ from . import trace_system
 from . import dipole_source
 from . import anisotropy
 
+#################################################################################
+#################################################################################
+#################################################################################
+#                                                                               #
+##           THIS CODE IS CURRENTLY UNNUSED - TO BE REMOVED                    ##
+#                                                                               #
+#################################################################################
+#################################################################################
+#################################################################################
 
 class SystemOutput():
     def __init__(self, detector, pupil_plot) -> None:
@@ -220,3 +229,5 @@ def anisotropy_measuring_system(collection_NA, collection_f, excitation_polarisa
     print("Theoretical anisotropy r =", r_theory)
 
     return (r, r_theory)
+
+
