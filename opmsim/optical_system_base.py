@@ -18,7 +18,7 @@ class OpticalSystem():
             'vector_plot': (list) indices of elements for which to plot ray diagrams
             'show_input_rays': (bool) whether to display figure of rays from source
             'calculate_entrance_pupil' (bool) whether to plot initial field in O1 space
-            'entrace_pupil_flat' (bool) if previous is true, whether to plot curved or flat pupil of O1
+            'entrance_pupil_flat' (bool) if previous is true, whether to plot curved or flat pupil of O1
         """
         init_start = time.time()
         self.title = title
@@ -29,7 +29,7 @@ class OpticalSystem():
             'vector_plot': range(len(elements)),  # plot vectors at every element
             'show_input_rays': False,
             'calculate_entrace_pupil': True,
-            'entrace_pupil_flat': False,  # for tracing to first surface, to show field on O1
+            'entrance_pupil_flat': False,  # for tracing to first surface, to show field on O1
             'draw_rays': False,
             'max_rays_stored': 200
         }

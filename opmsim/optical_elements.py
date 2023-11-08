@@ -179,15 +179,25 @@ class SineLens(Element):
             # plt.title(" theta after refraction")
             # plt.show()
             
-            lens_theta[np.abs(lens_theta) < 1e-9] = 0  # avoid negative values from floating point error
+            # avoid negative values from floating point error? later me: "this makes no sense"
+            lens_theta[np.abs(lens_theta) < 1e-9] = 0  
 
             # if abs(rays.rho) > self.D/2:  # Ray escapes system
-            escape_mask_na = abs(np.sin(rays.theta)) > abs(self.sine_theta)
+            # escape_mask_na = abs(np.sin(rays.theta)) > abs(self.sine_theta)
+            # now do things with angle -- avoids wrap-around issue hopefully?
+            escape_mask_na = abs(rays.theta) > np.arcsin(self.sine_theta)  # replace the 
             rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
             if any(escape_mask_na):
                 print(np.sum(escape_mask_na), "escaped from NA mask")
                 # print("sine_theta", self.sine_theta)
                 # print("max sin(theta)", np.max(np.sin(np.abs(rays.theta))))
+
+            # plt.figure()
+            # plt.scatter(rays.phi, rays.theta)
+            # plt.show()
+            # plt.figure()
+            # plt.scatter(rays.phi[np.invert(rays.escaped)], rays.theta[np.invert(rays.escaped)])
+            # plt.show()
 
             rays.theta = new_theta  # assign new theta
 
@@ -372,7 +382,7 @@ class FlatMirror():
     TODO: make fast version of this without all the tracing and such..
     """
     def __init__(self, rot_y, film_thickness=100e-9, 
-        n_film_file='../refractive_index_data/SiO.txt', 
+        n_film_file='../refractive_index_data/SiO2.txt', 
         n_metal_file='../refractive_index_data/Ag.txt', 
         retardance=True, perfect_mirror=False, update_history=False,
         fresnel_debug_savedir = None,
@@ -470,10 +480,10 @@ class FlatMirror():
         if self.update_history: rays.update_history()
 
         initial_phi = rays.phi
-
-        # starting field
-        initial_E_vec_4d = (rays.transfer_matrix @ rays.E_vec)#.squeeze()
-        initial_E_vec = initial_E_vec_4d[0,:,:,0]
+        if self.plot_debug:
+            # starting field
+            initial_E_vec_4d = (rays.transfer_matrix @ rays.E_vec)#.squeeze()
+            initial_E_vec = initial_E_vec_4d[0,:,:,0]
         
         rho_0 = rays.rho_before_trace
         dist_r = abs(rho_0/np.sin(rays.theta))  # distance for plotting
@@ -482,15 +492,15 @@ class FlatMirror():
 
         ################################################################
         # plot triangulated heatmap (initial field) without using phi and stuff for debugging
-        
         x0 = rho_0*np.cos(rays.phi)
         y0 = rho_0*np.sin(rays.phi)
         z0 = abs(dist_r)*(1-np.cos(rays.theta))
+        if self.plot_debug:
 
-        data_x =  np.real(initial_E_vec[:,0]*np.conj(initial_E_vec[:,0]))
-        data_y =  np.real(initial_E_vec[:,1]*np.conj(initial_E_vec[:,1]))
-        
-        self.heatmap_plot(x0, y0, data_x, data_y, title="Initial field")
+            data_x =  np.real(initial_E_vec[:,0]*np.conj(initial_E_vec[:,0]))
+            data_y =  np.real(initial_E_vec[:,1]*np.conj(initial_E_vec[:,1]))
+            
+            self.heatmap_plot(x0, y0, data_x, data_y, title="Initial field")
 
         ################################################################
 
@@ -551,53 +561,57 @@ class FlatMirror():
         if self.perfect_mirror:
             M_fresnel = np.identity(3)
             M_fresnel *= self.reflectance
+            print("USING PERFECT MIRROR")
         else:
             M_fresnel = np.array([
                 [1,0,0],
                 [0,1,0],
                 [0,0,0]
             ])
+            print("USING AIRY SUM MIRROR")
             M_fresnel = optical_matrices.protected_mirror_fresnel_matrix(
                 theta_i, self.n_film_data, self.film_thickness, self.n_metal_data, rays.lda)
+            # print(np.abs(M_fresnel))
+
 
         reflection_mat = optical_matrices.reflection_cartesian_matrix(N.squeeze())
 
         rays.transfer_matrix = reflection_mat @ inv_ps_proj @ M_fresnel @ ps_project @ rays.transfer_matrix 
         k_vec_ref =  reflection_mat @ rays.k_vec
-
-        print("----------------------Electric field after reflection------------------")
-        rays.quiver_plot(downsampling=1, n_rays = None)
-
-        # saving E fields for debugging # -------------------------
-
-        E_in = initial_E_vec
-        E_ps_proj = ps_project @ initial_E_vec_4d
-        E_ps_in = E_ps_proj[0,:,:,0]
-        E_ps_out = M_fresnel @ E_ps_proj
-        E_ps_out = E_ps_out[0,:,:,0]
-        E_out_4d = reflection_mat @ inv_ps_proj @ M_fresnel_test @ E_ps_proj
-        E_out = E_out_4d[0,:,:,0]
-
-        if self.fresnel_debug_savedir and not self.perfect_mirror:
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_in.csv"), E_ps_in)
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_in.csv"), E_in)
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_out.csv"), E_out)
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "theta.csv"), theta_i)
-            np.savetxt(os.path.join(self.fresnel_debug_savedir, "M_fresnel.csv"), M_fresnel.reshape(M_fresnel.shape[0], 9))
-
         rays.k_vec = k_vec_ref
 
-        ##### Check dot product
-        Eout_dot = np.sum(k_vec_ref[:,:,0] * E_out, axis=1)
-        # print("Dot product out")
-        plt.figure()
-        plt.scatter(initial_phi, Eout_dot)
-        plt.title("Phi against Eout dot with kout")
-        plt.show()
 
-        E_out2 = inv_ps_proj @ M_fresnel @ ps_project @ rays.transfer_matrix @ initial_E_vec_4d
+        print("----------------------Electric field after reflection------------------")
+        if self.plot_debug:
+            rays.quiver_plot(downsampling=1, n_rays = None)
+
+        if self.plot_debug:
+            # saving E fields for debugging # -------------------------
+
+            E_in = initial_E_vec
+            E_ps_proj = ps_project @ initial_E_vec_4d
+            E_ps_in = E_ps_proj[0,:,:,0]
+            E_ps_out = M_fresnel @ E_ps_proj
+            E_ps_out = E_ps_out[0,:,:,0]
+            E_out_4d = reflection_mat @ inv_ps_proj @ M_fresnel_test @ E_ps_proj
+            E_out = E_out_4d[0,:,:,0]
+
+            if self.fresnel_debug_savedir and not self.perfect_mirror:
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_in.csv"), E_ps_in)
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_in.csv"), E_in)
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_out.csv"), E_out)
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "E_ps_out.csv"), E_ps_out)
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "theta.csv"), theta_i)
+                np.savetxt(os.path.join(self.fresnel_debug_savedir, "M_fresnel.csv"), M_fresnel.reshape(M_fresnel.shape[0], 9))
+
+            ##### Check dot product
+            Eout_dot = np.sum(k_vec_ref[:,:,0] * E_out, axis=1)
+            # print("Dot product out")
+            plt.figure()
+            plt.scatter(initial_phi, Eout_dot)
+            plt.title("Phi against Eout dot with kout")
+            plt.show()
 
         ############   ############################################
         ############ CHECK THIS ############################################
@@ -640,68 +654,70 @@ class FlatMirror():
         ax1 = plt.figure().add_subplot(projection='3d')
         ax1.plot(rays.k_vec[:,0], rays.k_vec[:,1], rays.k_vec[:,2])
 
-        ###############################################################
-        # plot triangulated heatmap (reflected field) for debugging
-        data_x =  np.real(E_out[:,0]*np.conj(E_out[:,0]))
-        data_y =  np.real(E_out[:,1]*np.conj(E_out[:,0]))
-        
-        self.heatmap_plot(x, y, data_x, data_y, title="Reflected field")
+        if self.plot_debug:
+            ###############################################################
+            # plot triangulated heatmap (reflected field) for debugging
+            data_x =  np.real(E_out[:,0]*np.conj(E_out[:,0]))
+            data_y =  np.real(E_out[:,1]*np.conj(E_out[:,0]))
+            
+            self.heatmap_plot(x, y, data_x, data_y, title="Reflected field")
 
-        ################################################################
+            ################################################################
 
-        k_vec_norm_out = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1,1)
-        p_out = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm_out.squeeze())
+            k_vec_norm_out = rays.k_vec/np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1,1)
+            p_out = p_contact + (dist_r.reshape(dist_r.shape[0],1)*k_vec_norm_out.squeeze())
 
-        if rays.k_vec.shape[0] > 1:
-            p_out = p_out.squeeze()
-            p_contact = p_contact.squeeze()
+            if rays.k_vec.shape[0] > 1:
+                p_out = p_out.squeeze()
+                p_contact = p_contact.squeeze()
 
-        xline1 = np.array([x0, p_contact[:,0]]).T
-        yline1 = np.array([y0, p_contact[:,1]]).T
-        zline1 = np.array([z0, p_contact[:,2]]).T
+            xline1 = np.array([x0, p_contact[:,0]]).T
+            yline1 = np.array([y0, p_contact[:,1]]).T
+            zline1 = np.array([z0, p_contact[:,2]]).T
 
-        xline2 = np.array([p_contact[:,0], p_out[:,0]]).T
-        yline2 = np.array([p_contact[:,1], p_out[:,1]]).T
-        zline2 = np.array([p_contact[:,2], p_out[:,2]]).T
+            xline2 = np.array([p_contact[:,0], p_out[:,0]]).T
+            yline2 = np.array([p_contact[:,1], p_out[:,1]]).T
+            zline2 = np.array([p_contact[:,2], p_out[:,2]]).T
 
 
-        # Used to check inverse transform from p,s ########
+            # Used to check inverse transform from p,s ########
 
-        Ep = np.tile([1,0,0], (k_vec_norm.shape[0], 1))
-        Es = np.tile([0,1,0], (k_vec_norm.shape[0], 1))
-        kps = np.tile([0,0,1], (k_vec_norm.shape[0], 1))
-        Ep_ps = np.expand_dims(Ep, axis=[0,3])
-        Es_ps = np.expand_dims(Es, axis=[0,3])
-        kps = np.expand_dims(kps, axis=[0,3])
+            Ep = np.tile([1,0,0], (k_vec_norm.shape[0], 1))
+            Es = np.tile([0,1,0], (k_vec_norm.shape[0], 1))
+            kps = np.tile([0,0,1], (k_vec_norm.shape[0], 1))
+            Ep_ps = np.expand_dims(Ep, axis=[0,3])
+            Es_ps = np.expand_dims(Es, axis=[0,3])
+            kps = np.expand_dims(kps, axis=[0,3])
 
-        Ep_xyz = inv_ps_proj @ Ep_ps
-        Es_xyz = inv_ps_proj @ Es_ps
-        Ep_xyz = Ep_xyz[0,:,:,0]
-        Es_xyz = Es_xyz[0,:,:,0]
+            Ep_xyz = inv_ps_proj @ Ep_ps
+            Es_xyz = inv_ps_proj @ Es_ps
+            Ep_xyz = Ep_xyz[0,:,:,0]
+            Es_xyz = Es_xyz[0,:,:,0]
 
-        ###################################################
+            ###################################################
 
-        ax = plt.figure().add_subplot(projection='3d')
 
-        # for n in range(xline1.shape[0]):
-        from matplotlib.pyplot import cm
-        color = cm.rainbow(np.linspace(0, 1, 10))
-        n_rays = 10
-        len_line = len(xline1)
-        idxs = range(0,len_line,ceil(len_line/10))
-        if len(idxs)>n_rays:
-            idxs = idxs[0:-1]
-        for i, n in enumerate(idxs):
-            ax.plot(xline1[n], yline1[n], zline1[n], linestyle='solid', color=color[i])#, color='green')
-            ax.plot(xline2[n], yline2[n], zline2[n], linestyle='dashed', color=color[i])#, color='blue')
+            ax = plt.figure().add_subplot(projection='3d')
 
-            # coord axis
-            ax.quiver(x0[n], y0[n], z0[n], Ep_xyz[n,0], Ep_xyz[n,1], Ep_xyz[n,2], length=0.001, color='blue')
-            ax.quiver(x0[n], y0[n], z0[n], Es_xyz[n,0], Es_xyz[n,1], Es_xyz[n,2], length=0.001, color='blue')
+            # for n in range(xline1.shape[0]):
+            from matplotlib.pyplot import cm
+            color = cm.rainbow(np.linspace(0, 1, 10))
+            n_rays = 10
+            len_line = len(xline1)
+            idxs = range(0,len_line,ceil(len_line/10))
+            if len(idxs)>n_rays:
+                idxs = idxs[0:-1]
+            for i, n in enumerate(idxs):
+                ax.plot(xline1[n], yline1[n], zline1[n], linestyle='solid', color=color[i])#, color='green')
+                ax.plot(xline2[n], yline2[n], zline2[n], linestyle='dashed', color=color[i])#, color='blue')
 
-            ax.quiver(p_contact[n,0],p_contact[n,1], p_contact[n,2], p[n,0], p[n,1], p[n,2],color=color[i], length=0.001)
-            ax.quiver(p_contact[n,0],p_contact[n,1], p_contact[n,2], r[n,0], r[n,1], r[n,2],color=color[i], length=0.001)
-            ax.set_aspect('equal')
+                # coord axis
+                ax.quiver(x0[n], y0[n], z0[n], Ep_xyz[n,0], Ep_xyz[n,1], Ep_xyz[n,2], length=0.001, color='blue')
+                ax.quiver(x0[n], y0[n], z0[n], Es_xyz[n,0], Es_xyz[n,1], Es_xyz[n,2], length=0.001, color='blue')
+
+                ax.quiver(p_contact[n,0],p_contact[n,1], p_contact[n,2], p[n,0], p[n,1], p[n,2],color=color[i], length=0.001)
+                ax.quiver(p_contact[n,0],p_contact[n,1], p_contact[n,2], r[n,0], r[n,1], r[n,2],color=color[i], length=0.001)
+                ax.set_aspect('equal')
 
         return rays
     

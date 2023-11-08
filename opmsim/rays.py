@@ -45,6 +45,7 @@ class PolarRays:
         # self.transfer_matrix = self.transfer_matrix.reshape(1,self.n,3,3)
         self.alternative_minimum = None  # used when E-values are set to 0 manually
         self.negative_kz = False
+        self.ray_density = self.n/np.sum(area_array)
 
         self.keep_history = keep_history  # actually overrided by apply_matrix which decides this..
         self.num_rays_saved = num_rays_saved
@@ -136,6 +137,17 @@ class PolarRays:
         self.update_history()  # save rays before
         # print("before rotate", rays.I_vec)
         self.rotate_rays_local_basis(inverse_meridional=inverse_meridional)
+
+    def get_intensity(self, scaling=1):
+        I = np.real(self.E_vec*np.conj(self.E_vec))*scaling#/
+        print("mean(scaling)",np.mean(scaling))
+        self.I_per_dipole_xyz = np.mean(I, axis=0)
+        print("I_per_dipole_shape", self.I_per_dipole_xyz.shape)
+        I_per_dipole = np.sum(self.I_per_dipole_xyz, axis=1)
+        I_sum = np.sum(I_per_dipole)
+        # NEED TO EXPRESS IN A WAY INDEPENDENT OF RAY COUNT/DENSITY IDEALLY!
+        self.I_vec = I
+        self.I_total_norm = I_sum/self.ray_density
     
     def remove_escaped_rays(self, escaped=None):
         """is there a more efficient way of doing this?"""

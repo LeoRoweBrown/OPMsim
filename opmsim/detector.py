@@ -35,6 +35,7 @@ class Detector():
         self.I_total_integral = None
         self.max_r = None
         self.info = None
+        self.isinitial = False
 
     def detect_rays(self, rays):
         """
@@ -55,9 +56,10 @@ class Detector():
 
         # squeeze to avoid broadcasting and (N,N) arrays instead of N
         # print(rays.I_vec)
-        self.Ix_raw = rays.I_total[:,0]
-        self.Iy_raw = rays.I_total[:,1]
-
+        self.Ix_raw = rays.I_per_dipole_xyz[:,0]
+        self.Iy_raw = rays.I_per_dipole_xyz[:,1]
+        print("area scaling", rays.area_scaling.shape)
+        print("Ix_raw",self.Ix_raw.shape)
         self.Ix_area_scaled = self.Ix_raw.squeeze() * rays.area_scaling
         self.Iy_area_scaled = self.Iy_raw.squeeze() * rays.area_scaling
 
@@ -105,24 +107,36 @@ class Detector():
         self.I_total_integral = self.Ix_integral + self.Iy_integral
 
     def plot_pupil(self, title="", show_prints=False, plot_arrow=None,
-            fill_zeroes=False, scale_range=None, rotate_90=False, caption=True, max_r_in=None):
+            fill_zeroes=False, scale_range=None, rotate_90=False, caption=True, max_r_in=None,
+            use_circle_path=False, value_scale = 10, auto_scale=False,add_autoscale_plots=False):
         print("ray count", self.rays.n_final)
         if self.rays.n_final < 4:
             print("not enough points to plot pupil, skipping")
             return
-        if caption:
-            caption_text = r'$Ix/Iy = %.4f$, $RCE = %.4f$' % (self.Ix_Iy_ratio, self.energy_ratio)
+        if caption and not self.isinitial:
+            caption_text = r'$I_x/I_y=%.5g$, $RCE=%.5g$, $EE=%.5g$, $CE=%.5g$' % \
+                (self.Ix_Iy_ratio, self.relative_collection_efficiency,
+                  self.emission_efficiency, self.collection_efficiency)
         else:
             caption_text = None
         if max_r_in is 'max_r':
             max_r_in = self.max_r
 
+        if auto_scale:
+            scale_range = None
+            title += ' (autoscaled)'
+
+        Ix = self.Ix_area_scaled*value_scale
+        Iy = self.Iy_area_scaled*value_scale
+
+        print("max Ix", np.max(Ix))
         pupil = graphics.PupilPlotObject(
             self.unstructured_x, self.unstructured_y,
-            self.Ix_area_scaled, self.Iy_area_scaled)
+            Ix, Iy)
         fig, pc = pupil.plot(title, show_prints, plot_arrow,
-            fill_zeroes, scale_range, rotate_90, caption_text, max_r_in)
-        # self.pupil = pupil
+            fill_zeroes, scale_range, rotate_90, caption_text, max_r_in,
+            use_circle_path=use_circle_path,add_autoscale_plots=add_autoscale_plots)
+        self.pupil = pupil
         return fig# pupil
 
     def get_final_polar_coords(self, rays, curved):

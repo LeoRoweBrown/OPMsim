@@ -32,7 +32,7 @@ class DipoleSource:
         self.phi_d = phi_d_array
         self.lda_em = lda_em
         self.lda_exc = lda_exc
-        self.density = np.ones((len(alpha_d_array), 1, 1, 1))  # scales quantity/density/fractional quanitity of dipole
+        self.emission_scaling = np.ones((len(alpha_d_array), 1, 1, 1))  # scales quantity/emission_scaling/fractional quanitity of dipole
         self.n_dipoles = len(phi_d_array)
 
         self.excitation_polarisation = None
@@ -42,22 +42,13 @@ class DipoleSource:
         # angles given with theta measured from x not z so cos(theta) <-> sin(theta)
 
         self._get_p_vec()
-    
+
     def _get_p_vec(self):
         self.p_vec = np.column_stack(
-            (np.cos(self.alpha_d)*np.sin(self.phi_d),
-            np.cos(self.alpha_d)*np.cos(self.phi_d),
+            (np.cos(self.alpha_d)*np.cos(self.phi_d),
+            np.cos(self.alpha_d)*np.sin(self.phi_d),
             np.sin(self.alpha_d)))
         self.p_vec = self.p_vec.reshape((len(self.phi_d), 3))
-
-    def get_2pi_energy(self, f, rays):
-        phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
-            1, ray_count=5000, method='uniform_phi_inbetween')
-        rays_1NA = PolarRays(phi_k, theta_k, f, areas, lda=self.lda_em)
-        self.get_initial_efields(rays_1NA)
-        
-        return rays_1NA.initial_energy
-
 
     def get_initial_efields(self, rays):
         # use _get_efield to calculate the E field based on a propagation vector
@@ -80,13 +71,21 @@ class DipoleSource:
         n_x_p = np.cross(n_vec,p_vec)
         k = 2*np.pi/self.lda_exc 
  
+        print("pvec shape", p_vec.shape)
+        print("nvec shape",n_vec.shape)
+
         rays.E_vec = np.cross(n_x_p, n_vec)  # (N_rays, N_dipole, 3)
         rays.E_vec = rays.E_vec.reshape((n_dipoles, n_rays, 3, 1)) # E_vecs are (3x1)
         rays.E_pre  = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
-
-        rays.I_total_initial = np.sum(rays.E_vec * rays.E_vec*self.density, axis=0)
+        print(rays.E_vec.shape)
+        self.emission_scaling = self.emission_scaling.reshape(n_dipoles,1,1,1)
+        print(self.emission_scaling.shape)
+        rays.I_total_initial = np.sum(rays.E_vec * rays.E_vec*self.emission_scaling, axis=0)
         # energy per dipole
-        rays.initial_energy = np.sum(rays.I_total_initial)/n_dipoles
+        
+        rays.get_intensity(self.emission_scaling)
+        rays.I_vec_initial = rays.I_vec
+        rays.initial_energy = rays.I_total_norm
 
         print("initial energy shape", rays.initial_energy.shape)
 
@@ -103,7 +102,7 @@ class DipoleSource:
         # for previous calls of add_dipoles
         self.phi_d = np.append(self.phi_d, dipole_angles[:][0])
         self.alpha_d = np.append(self.alpha_d, dipole_angles[:][1])
-        self.density = np.append(self.density, np.ones(np.size(dipole_angles[:][0])))
+        self.emission_scaling = np.append(self.emission_scaling, np.ones(np.size(dipole_angles[:][0])))
         self.n_dipoles = len(self.phi_d)
         self._get_p_vec()
         
@@ -134,9 +133,9 @@ class DipoleSource:
             raise ValueError("Only supports 'random' or 'uniform' distriubted dipoles")
 
         self.n_dipoles = len(self.phi_d)
-        self.density = np.ones(len(self.phi_d))
+        self.emission_scaling = np.ones(len(self.phi_d))
         # print("self.n_dipoles", self.n_dipoles)
-        # print("self.density", len(self.density))
+        # print("self.emission_scaling", len(self.emission_scaling))
         # self.lda_em = np.append(self.lda_em, np.ones(self.n_dipoles)*lda_em)
 
         ## plot to verify distribution
@@ -146,86 +145,19 @@ class DipoleSource:
         printif("Generating %d dipoles" % self.n_dipoles, show_prints)
         self._get_p_vec()
 
-    def depolarise(self, correlation_time, fluorescence_lifetime, n_samples=8):
+    def depolarise(self, correlation_time, fluorescence_lifetime, timepoints=100):
         # TODO: check this, very untested
         # simulate the perrin equation by rotating dipoles in a random direction
         D = correlation_time
         tau = fluorescence_lifetime
-        self.p_vec = self.simulate_rotational_diffusion(self.p_vec, D, tau)
+        self.p_vec = self.simulate_rotational_diffusion(
+            self.p_vec, D, tau, timepoints=timepoints)
 
         # update angles as well # TODO CHECK THIS
         self.alpha_d = np.arcsin(self.p_vec[:,2])
         self.phi_d = np.arctan2(self.p_vec[:, 0], self.p_vec[:, 1])
-        """
-        p_vec_t0 = self.p_vec
-        density_t0 =  self.density
-        # remember that p_vec shape is (n_dipoles, 1, 3)
-        # now it becomes (n_samples*n_dipoles, 1, 3)
-
-        for n in range(n_samples):
-            ux = 2*np.random.random(self.n_dipoles) - 1
-            uy = 2*np.random.random(self.n_dipoles) - 1
-            uz = 2*np.random.random(self.n_dipoles) - 1
-
-            mag = (ux*ux + uy*uy + uz*uz)**0.5
-            ux /= mag
-            uy /= mag
-            uz /= mag
-                
-            # print('rotation axis', [ux,uy,uz])
-            fig = plt.figure()
-            ax = fig.add_subplot(projection='3d')
-            ax.scatter(ux,uy,uz)
-            plt.show()
-
-            rotate = optical_matrices.arbitrary_rotation(\
-                fluorescence_lifetime/(correlation_time*1/n_samples), ux,uy,uz)
-
-            print("shape of rotate", rotate.shape)
-            p_vec_t = p_vec_t0.reshape(
-                (p_vec_t0.shape[0], p_vec_t0.shape[1], 1))
-            print("shape of p_vec", p_vec_t.shape)
-            p_vec_t =  rotate @ p_vec_t
-            print("shape of pvec after", p_vec_t.shape)
-            p_vec_t = p_vec_t.reshape(
-                p_vec_t.shape[0], p_vec_t.shape[1])
-            phi_d_t = np.arctan2(p_vec_t[:,0], p_vec_t[:,1])
-            alpha_d_t = np.arccos(p_vec_t[:,2])
-            # append next timepoint in tumbling
-            self.p_vec = np.append(self.p_vec, p_vec_t, axis=0)
-            self.phi_d = np.append(self.phi_d, phi_d_t)
-            self.alpha_d = np.append(self.alpha_d, alpha_d_t)
-            self.density = np.append(self.density, density_t0)
-
-       
-        self.plot_distribution(self.density)
-        plt.figure()
-        plt.hist(self.alpha_d)
-        plt.hist(self.phi_d)
-        plt.show()
-
-        det = np.linalg.det(rotate)
-        print(det)
-        plt.figure()
-        plt.hist(det)
-        plt.show()
-
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
-        plt.scatter(self.p_vec[:,0], self.p_vec[:,1], self.p_vec[:,2]) 
-        plt.show()
-        print(self.p_vec)
-
-        p_test = np.array([1, 0, 0])
-        alpha_test = np.arctan2(p_test[0],p_test[1])
-        phi_test = np.arccos(p_test[2])
-        rotate_test = optical_matrices.arbitrary_rotation(\
-            fluorescence_lifetime/correlation_time, 0,1,0)
-        p_test_rot = rotate_test @ p_test
-        print(p_test)
-        print(p_test_rot)
-        """
-        self.plot_distribution(self.density)
+        
+        self.plot_distribution(self.emission_scaling)
 
         # fig = plt.figure()
         # ax = fig.add_subplot(projection='3d')
@@ -236,12 +168,9 @@ class DipoleSource:
 
     def plot_distribution(self, alphas=[]):
         # plot on sphere - maybe move this plotting somewhere more elegant
-        x = np.cos(self.alpha_d)*np.sin(self.phi_d) # TODO: IS THIS RIGHT? alpha_d=0 phi_d=0 should be x=1
-        y = np.cos(self.alpha_d)*np.cos(self.phi_d)
+        x = np.cos(self.alpha_d)*np.cos(self.phi_d)
+        y = np.cos(self.alpha_d)*np.sin(self.phi_d)
         z = np.sin(self.alpha_d)
-
-        phi_exc, alpha_exc = self.excitation_polarisation
-        x_ex = np.cos(alpha_exc)*np.sin(phi_exc)
 
         facec_ = np.asarray(np.tile([0,0,0,0], [len(x),1]), dtype=np.float64)
         edgec_ = np.asarray(np.tile([0,0,0,1], [len(x),1]), dtype=np.float64)
@@ -256,17 +185,20 @@ class DipoleSource:
         facec = facec_
         edgec = edgec_
         facec[y_mask] = [0,0,0,1]
+        alphas /= np.max(alphas)  # avoid a rogue alpha > 1 (yes it happens)
+
         edgec[:,3] *= alphas
         facec[:,3] *= alphas
+ 
         # facecolors = np.array(['none']*len(x))
         # ax_xz.scatter(z[y_mask], x[y_mask], s=5, alpha=alphas)
-        ax_xz.scatter(z, x, s=5, facecolors=facec, edgecolors=edgec)
+        ax_xz.scatter(x, z, s=5, facecolors=facec, edgecolors=edgec)
         # plot points with y < 0, i.e. the 'behind' points
         # ax_xz.scatter(z[np.invert(y_mask)], x[np.invert(y_mask)],\
         #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
-        ax_xz.set_title("Distribution of dipole points \n on sphere (ZX)")
-        ax_xz.set_xlabel("z")
-        ax_xz.set_ylabel("x")
+        ax_xz.set_title("Distribution of dipole points \n on sphere (XZ)")
+        ax_xz.set_xlabel("x")
+        ax_xz.set_ylabel("z")
         ax_xz.set_aspect('equal')
 
         ax_xy = f2d.add_subplot(132)
@@ -278,13 +210,13 @@ class DipoleSource:
         facec[:,3] *= alphas
         facecolors = np.array(['none']*len(x))
         facecolors[z_mask] = 'k'
-        ax_xy.set_title("Distribution of dipole points \n on sphere (YX)")
-        ax_xy.scatter(y, x, s=5, facecolors=facec, edgecolors=edgec)
+        ax_xy.set_title("Distribution of dipole points \n on sphere (XY)")
+        ax_xy.scatter(x, y, s=5, facecolors=facec, edgecolors=edgec)
         # ax_xy.scatter(y[z_mask], x[z_mask], s=5, alpha=alphas)
         # ax_xy.scatter(y[np.invert(z_mask)], x[np.invert(z_mask)],\
         #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
-        ax_xy.set_xlabel("y")
-        ax_xy.set_ylabel("x")
+        ax_xy.set_xlabel("x")
+        ax_xy.set_ylabel("y")
         ax_xy.set_aspect('equal')
 
         ax_zy = f2d.add_subplot(133)
@@ -296,7 +228,7 @@ class DipoleSource:
         facec[:,3] *= alphas
         facecolors = np.array(['none']*len(x))
         facecolors[x_mask] = 'k'
-        ax_zy.set_title("Distribution of dipole points \n on sphere (YZ)")
+        ax_zy.set_title("Distribution of dipole points \n on sphere (ZY)")
         ax_zy.scatter(z, y, s=5, facecolors=facec, edgecolors=edgec)
         # ax_zy.scatter(z[x_mask], y[x_mask], s=5, alpha=alphas)
         # ax_zy.scatter(z[np.invert(x_mask)], y[np.invert(x_mask)],\
@@ -306,15 +238,46 @@ class DipoleSource:
         ax_zy.set_ylabel("y")
         ax_zy.set_aspect('equal')
         f2d.tight_layout()
+
+        if self.excitation_polarisation is not None:
+            phi_exc, alpha_exc = self.excitation_polarisation
+            print("plot exc arrow")
+            x_ex = np.cos(alpha_exc)*np.cos(phi_exc)
+            y_ex = np.cos(alpha_exc)*np.sin(phi_exc)
+            z_ex = np.sin(alpha_exc)  # unused at moment
+
+            w = 0.2
+            if abs(x_ex) < 1e-9 and abs(z_ex) < 1e-9:
+                ax_xz.plot(0,0, marker = 'o', markersize=16, markeredgecolor='k',markeredgewidth=2)
+            else:
+                ax_xz.arrow(0, 0, (1-w)*x_ex, (1-w)*z_ex, head_width=0.2, head_length=0.2,linewidth=2)#,length_includes_head=True)
+                ax_xz.arrow(0, 0, -(1-w)*x_ex, -(1-w)*z_ex, head_width=0.2, head_length=0.2,linewidth=2)#,length_includes_head=True)
+
+            if abs(x_ex) < 1e-9 and abs(y_ex) < 1e-9:
+                ax_xy.plot(0,0, marker = 'o', markersize=16,markeredgecolor='k',markeredgewidth=2)
+            else:
+                ax_xy.arrow(0, 0, (1-w)*x_ex, (1-w)*y_ex, head_width=0.2, head_length=0.2,linewidth=2)#,length_includes_head=True)
+                ax_xy.arrow(0, 0, -(1-w)*x_ex, -(1-w)*y_ex, head_width=0.2, head_length=0.2,linewidth=2)#,length_includes_head=True)
+            if abs(z_ex) < 1e-9 and abs(y_ex) < 1e-9:
+                ax_zy.plot(0,0, marker = 'o', markersize=16,markeredgecolor='k',markeredgewidth=2)
+            else:
+                ax_zy.arrow(0, 0, (1-w)*z_ex, (1-w)*y_ex, head_width=0.2, head_length=0.2,linewidth=2)#,length_includes_head=True)
+                ax_zy.arrow(0, 0, -(1-w)*z_ex, -(1-w)*y_ex, head_width=0.2, head_length=0.2,linewidth=2)#,length_includes_head=True)
         
         plt.show()
     
     def classical_photoselection(self, excitation_polarisation, plot=True):
         """Scale the intensity from dipoles based on their orientation and the
         excitation polarisation"""
+        
+        if excitation_polarisation is None:
+            if plot:
+                alphas = np.ones_like(self.phi_d)*1/3
+                self.plot_distribution(alphas)
+            return
         dipole_count = len(self.phi_d)
         phi_exc, alpha_exc = excitation_polarisation
-        self.density = np.ones(len(self.phi_d))
+        self.emission_scaling = np.ones(len(self.phi_d))
         self.excitation_polarisation = excitation_polarisation
 
         phi_d = self.phi_d
@@ -323,10 +286,10 @@ class DipoleSource:
         cos_d_exc = np.cos(alpha_exc)*np.cos(phi_exc)*np.cos(alpha_d)*np.cos(phi_d) +\
             np.cos(alpha_exc)*np.sin(phi_exc)*np.cos(alpha_d)*np.sin(phi_d) +\
             np.sin(alpha_exc)*np.sin(alpha_d)
-        self.density = cos_d_exc**2
+        self.emission_scaling = cos_d_exc**2  # normalise to 1
         
         if plot:
-            alphas = self.density
+            alphas = self.emission_scaling
             self.plot_distribution(alphas)
 
     def plot_ray_sphere(self, phi, theta, plot_histo=False):
@@ -382,6 +345,16 @@ class DipoleSource:
         ax.set_title("Simulated ray distribution in pupil (sine projection)")
         plt.show()
 
+        
+    def get_2pi_energy(self, f, ray_count):
+        phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
+            1, point_count=ray_count, method='uniform_phi_inbetween',hemisphere=True)
+        rays_1NA = PolarRays(phi_k, theta_k, f, areas, lda=self.lda_em)
+        self.get_initial_efields(rays_1NA)
+        print("n rays 2pi = ", rays_1NA.I_total_initial.shape[0])
+        
+        return rays_1NA.initial_energy, areas
+
     def get_rays_uniform_rings(self, NA, f, ray_count=5000,\
         method='uniform_phi_inbetween', plot_sphere=False):
         """ Get equal area elements in rings for uniform rays, also compute their area"""
@@ -392,14 +365,45 @@ class DipoleSource:
         self.NA = NA
         self.ray_area = areas  # do we need dipole_source to have this attribute?
 
+        # plt.figure()
+        # plt.hist(areas)
+        # plt.xlabel("Ray element areas")
+        # plt.show()
+
         self.rays = PolarRays(phi_k, theta_k, f, areas, lda=self.lda_em)
         self.get_initial_efields(self.rays)
-        # self.density = self.density.reshape((len(phi_k), 1, 1, 1))
+        # energy integrated over half sphere -- 
+        # effectively the total integrated energy over 2pi (hemisphere solid angle)
+        half_sphere_energy, area_2pi = self.get_2pi_energy(f, ray_count)
+
+        print(self.rays.I_total_initial.shape)
+        # plt.figure()
+        # plt.hist(np.sum(self.rays.I_total_initial,axis=1))
+        # plt.xlabel("Ray intensities")
+        # plt.show()
+        print("n rays = ", self.rays.I_total_initial.shape[0])
+        # scaled to NA
+        actual_area = np.sum(areas)
+        print("NA area vs real area?", actual_area, 2*np.pi*(1-(1-NA**2)**0.5) )
+        half_sphere_energy_NA = (1-(1-NA**2)**0.5)*half_sphere_energy
+        half_sphere_energy_NA = actual_area*half_sphere_energy/np.sum(area_2pi)
+        # descrbied how advantageous the collection is
+        self.rays.emission_efficiency = self.rays.initial_energy/half_sphere_energy_NA
+        self.rays.half_sphere_energy = half_sphere_energy
+        self.rays.average_energy_times_NA = half_sphere_energy_NA
+
+        print("half_sphere_energy",half_sphere_energy)
+        print("initial_energy",self.rays.initial_energy)
+
+
+        print("rays when NA scaled up to hemisphere",self.rays.I_total_initial.shape[0]*2*np.pi/actual_area)
+        
+        # self.emission_scaling = self.emission_scaling.reshape((len(phi_k), 1, 1, 1))
 
         if plot_sphere:
             self.plot_ray_sphere(phi_k, theta_k)
 
-    def simulate_rotational_diffusion(p_vec, D, tau, timepoints=None):
+    def simulate_rotational_diffusion(self, p_vec, D, tau, timepoints=None):
         """
         Return new dipole orientations after depolarisation from rotational diffusion
         
@@ -419,6 +423,7 @@ class DipoleSource:
         dt = tau/timepoints
         # decay: exp (-t/τF)
         t = 0
+        # statistical method
         while len(index_list) > 0:
             # rotate exp (-t/τF) * n_dipoles, leave the rest
             expected_n = int(np.round(np.exp(-t/tau)*n_dipoles))

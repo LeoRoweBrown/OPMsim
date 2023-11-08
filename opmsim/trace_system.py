@@ -57,12 +57,20 @@ def trace_rays(elements, source, options):
     rays.transfer_matrix = rays.transfer_matrix.reshape((1,rays.n_final,3,3))
     rays.E_vec = rays.transfer_matrix @ rays.E_vec
 
-    source.density = source.density.reshape((rays.E_vec.shape[0],1,1,1))
-    I_vec = np.real(rays.E_vec*np.conj(rays.E_vec))*(source.density)# /rays.n  # scale by ray count
-    
-    rays.I_total = np.sum(I_vec, axis=0)  # sum over dipoles
-    rays.alternative_minimum = np.min(np.concatenate((rays.I_total[:,0], rays.I_total[:,1])))
-    rays.final_energy = np.sum(rays.I_total)
+    source.emission_scaling = source.emission_scaling.reshape((rays.E_vec.shape[0],1,1,1))
+
+    rays.get_intensity(source.emission_scaling)
+    # I_vec = np.real(rays.E_vec*np.conj(rays.E_vec))*(source.emission_scaling)# /rays.n  # scale by ray count
+    # rays.I_total = np.sum(I_vec, axis=0)  # sum over dipoles
+    # rays.alternative_minimum = np.min(np.concatenate((rays.I_total[:,0], rays.I_total[:,1])))
+    # print("source.emission_scaling", source.emission_scaling)
+    if source.emission_scaling.squeeze().size > 1:
+        plt.figure()
+        plt.hist(source.emission_scaling.squeeze())
+        plt.xlabel("emission_scaling/photoselection scaling")
+        plt.show()
+
+    detector.final_energy = rays.I_total_norm
 
     kx = np.sin(rays.theta)*np.cos(rays.phi)
     ky = np.sin(rays.theta)*np.sin(rays.phi)
@@ -86,25 +94,31 @@ def trace_rays(elements, source, options):
 
     # maybe move this to detector? No harm done though
     print("Limiting radius for detector:", detector.max_r)
-    print("Energy ratio (efficiency):", rays.final_energy/np.sum(rays.initial_energy))
-    print("Total energy:", rays.final_energy)
-    print("Total energy per dipole:", rays.final_energy/source.n_dipoles)
-    detector.energy_per_dipole = rays.final_energy/source.n_dipoles
-    detector.energy_ratio = rays.final_energy/np.sum(rays.initial_energy)
+    print("Energy ratio (efficiency):", detector.final_energy/rays.initial_energy)
+    print("Total energy per dipole per ray:", detector.final_energy)
+    # detector.energy_per_dipole = rays.final_energy/source.n_dipoles
+    detector.relative_collection_efficiency = detector.final_energy/rays.initial_energy
+    detector.scaled_relative_collection_efficiency = \
+        rays.emission_efficiency*detector.relative_collection_efficiency
+    detector.emission_efficiency = rays.emission_efficiency
+    detector.collection_efficiency = detector.final_energy/rays.half_sphere_energy
+
     detector.n_dipoles = source.n_dipoles
-    Energy_x = np.sum(rays.I_total[:,0])
-    Energy_y = np.sum(rays.I_total[:,1])
+    Energy_x = np.sum(rays.I_per_dipole_xyz[:,0])
+    Energy_y = np.sum(rays.I_per_dipole_xyz[:,1])
     detector.Ix_Iy_ratio = Energy_x/Energy_y
-    old_Ix_Iy_ratio = np.sum(np.sum(rays.I_total[:,0]/rays.I_total[:,1]))
-    print("Ix Iy ratio =", old_Ix_Iy_ratio)
+
     print("Energy from Ix", Energy_x)
     print("Energy from Iy", Energy_y)
     print("X/Y energy ratio =", detector.Ix_Iy_ratio)
+    print("Half sphere energy", rays.half_sphere_energy)
+    print("Initial energy", rays.initial_energy)
+    print("half sphere energy NA", rays.average_energy_times_NA)
     
     # -----------------------------------------------
     
     # checking for cases where E not perpendicular with k (something went wrong)
-    if any(np.abs(rays.I_total[:,2] > 1e-9)):  # check non-zero z comp
+    if any(np.abs(rays.I_per_dipole_xyz[:,2] > 1e-9)):  # check non-zero z comp
         dotp = np.sum(rays.I_total * rays.k_vec, axis=1)
         if any(np.abs(dotp) > 1e-9):
             print("Error in I dot product too!")
@@ -126,7 +140,7 @@ def trace_rays(elements, source, options):
     # are traced through the system
     
     if options['calculate_entrace_pupil']:
-        if options['entrace_pupil_flat']:
+        if options['entrance_pupil_flat']:
             initial_detector = Detector(curved=False)
             initial_rays = elements[0].apply_matrix(initial_rays)
         else:
@@ -140,12 +154,10 @@ def trace_rays(elements, source, options):
         lost_rays = initial_rays.remove_escaped_rays(rays.escaped)
         
         initial_rays.E_vec = initial_rays.transfer_matrix @ initial_rays.E_vec
-        # initial_rays.combine_rays(lost_rays)  # add the zeroes back on
-        I_vec_initial = np.real(initial_rays.E_vec*np.conj(initial_rays.E_vec))*source.density
+        initial_rays.get_intensity(source.emission_scaling)
 
-        initial_rays.I_total = np.sum(I_vec_initial, axis=0)  # sum over dipoles
-        initial_rays.alternative_minimum = rays.alternative_minimum
         initial_detector.detect_rays(initial_rays)
+        initial_detector.isinitial = True
 
         return detector, initial_detector
     return detector

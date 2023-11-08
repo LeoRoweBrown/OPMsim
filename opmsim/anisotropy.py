@@ -1,19 +1,27 @@
 import numpy as np
 
 def calculate_anisotropy_rawdata(detector_p, detector_s, simulate_polariser=False):
+
     if simulate_polariser:
         I_p = detector_p.Iy_integral
         I_s = detector_s.Ix_integral
     else:
         I_p = detector_p.I_total_integral
         I_s = detector_s.I_total_integral
+
     r = (I_p - I_s)/(I_p + 2*I_s)
     return r
 
-def calculate_anisotropy(detector):
+def calculate_anisotropy(detector, polariser_phi=None):
     """a bit pointless and over-engineered"""
-    I_p = detector.Iy_integral
-    I_s = detector.Ix_integral
+    if polariser_phi is None:
+        I_p = detector.Iy_integral
+        I_s = detector.Ix_integral
+    else:
+        I_p = detector.Ix_integral*np.cos(polariser_phi) +\
+            detector.Iy_integral*np.sin(polariser_phi)
+        I_s = detector.Ix_integral*np.sin(polariser_phi) +\
+            detector.Iy_integral*np.cos(polariser_phi)
 
     r = (I_p - I_s)/(I_p + 2*I_s)
     return r
