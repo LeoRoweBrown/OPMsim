@@ -139,10 +139,12 @@ class PolarRays:
         self.rotate_rays_local_basis(inverse_meridional=inverse_meridional)
 
     def get_intensity(self, scaling=1):
+        """
+        calculate field intensity on surface for the 
+        rays object scaled by photoselection
+        """
         I = np.real(self.E_vec*np.conj(self.E_vec))*scaling#/
-        print("mean(scaling)",np.mean(scaling))
         self.I_per_dipole_xyz = np.mean(I, axis=0)
-        print("I_per_dipole_shape", self.I_per_dipole_xyz.shape)
         I_per_dipole = np.sum(self.I_per_dipole_xyz, axis=1)
         I_sum = np.sum(I_per_dipole)
         # NEED TO EXPRESS IN A WAY INDEPENDENT OF RAY COUNT/DENSITY IDEALLY!

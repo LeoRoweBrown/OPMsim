@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import pyplot as plt
 import scipy
 
 ## functions for matrices that need to me multiplied together to give tracing for
@@ -86,7 +87,7 @@ def fresnel_mirror_flat(rp, rs):
     ])
     return mirror
 
-def fresnel_matrix(theta_i, n1, n2):
+def fresnel_matrix(theta_i, n1, n2, reflection=True):
     sin_theta_t = (n1/n2)*np.sin(theta_i)
     print("sin_theta_t", sin_theta_t)
     print("n2/n1", n2/n1)
@@ -101,12 +102,24 @@ def fresnel_matrix(theta_i, n1, n2):
         (n1*np.cos(theta_i) + n2*np.cos(theta_t))
     r_p = (n2*np.cos(theta_i) - n1*np.cos(theta_t))/\
         (n2*np.cos(theta_i) + n1*np.cos(theta_t))
-    mat = np.array([
+    
+    t_s = 2*n1*np.cos(theta_i)/(n1*np.cos(theta_i)+n2*np.cos(theta_t))
+    t_p = 2*n1*np.cos(theta_i)/(n2*np.cos(theta_i)+n1*np.cos(theta_t))
+
+    mat_t = np.array([
+        [t_p, 0, 0],
+        [0, t_s, 0],
+        [0, 0, 1]
+    ])
+    mat_r = np.array([
         [r_p, 0, 0],
         [0, r_s, 0],
         [0, 0, 1]
     ])
-    return mat
+    if reflection:
+        return mat_r
+    else:
+        return mat_t, theta_t
 
 def wave_plate(psi, delta):
     waveplate = np.array([
@@ -191,59 +204,64 @@ def reflection_cartesian_matrix(N):
     ]
     return reflect_matrix
 
-def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness,
-                                    n_metal_data, wavelength=500e-9,plot_debug=False):
-    wl_mul=1e9
-    n_film_wl = n_film_data[:,0]/wl_mul
-    n_film = n_film_data[:,1]
-    k_film = n_film_data[:,2]
-
-    n_metal_wl = n_metal_data[:,0]/wl_mul
-    n_metal = n_metal_data[:,1]
-    k_metal = n_metal_data[:,2]
-
-    n_film_interp = scipy.interpolate.interp1d(n_film_wl, n_film)
-    k_film_interp = scipy.interpolate.interp1d(n_film_wl, k_film)
-
-    n_metal_interp = scipy.interpolate.interp1d(n_metal_wl, n_metal)
-    k_metal_interp = scipy.interpolate.interp1d(n_metal_wl, k_metal)
-
-    # print("theta_i")
-
-    if hasattr(wavelength, "__len__"):
-        if len(wavelength == 1):
-            wavelength = np.ones(len(theta_i))*wavelength
-
-    wl_test = np.arange(300,800)/wl_mul
-    n_film_test = n_film_interp(wl_test) + 1j*k_film_interp(wl_test)
-    n_metal_test =  n_metal_interp(wl_test) + 1j*k_metal_interp(wl_test)
-
-    from matplotlib import pyplot as plt
-
-
-    n_film_complex = n_film_interp(wavelength) + 1j*k_film_interp(wavelength)
-    n_metal_complex = n_metal_interp(wavelength) + 1j*k_metal_interp(wavelength)
-
-    print("n_film_complex", n_film_complex)
-    print("n_metal_complex",n_metal_complex)
-
-    if plot_debug:
-        plt.figure()
-        plt.plot(wl_test, n_film_test.real, label=r'$\mathcal{R}(n_{film})$')
-        plt.plot(wl_test, n_film_test.imag, label=r'$\mathcal{I}(n_{film})$')
-        plt.plot(wl_test, np.abs(n_film_test), label=r'$|n_{film}|$')
-        plt.xlabel("Wavelength")
-        plt.legend()
-        plt.show()
-        plt.figure()
-        plt.plot(wl_test, n_metal_test.real, label=r'$\mathcal{R}(n_{metal})$')
-        plt.plot(wl_test, n_metal_test.imag, label=r'$\mathcal{I}(n_{metal})$')
-        plt.plot(wl_test, np.abs(n_metal_test), label=r'$|n_{metal}|$')
-        plt.xlabel("Wavelength")
-        plt.legend()
-        plt.show()
+def thin_film_fresnel_matrix(theta_i, n_film_data, film_thickness,
+                                    n_substrate_data, wavelength=500e-9,
+                                    plot_debug=False, reflection=True):
     
-    r_p, r_s = compute_fresnel_protected_mirror(theta_i, n_film_complex, film_thickness, n_metal_complex, wavelength)
+    if hasattr(n_film_data, "__len__") and hasattr(n_substrate_data, "__len__"):
+        wl_mul=1e9
+        n_film_wl = n_film_data[:,0]/wl_mul
+        n_film = n_film_data[:,1]
+        k_film = n_film_data[:,2]
+
+        n_substrate_wl = n_substrate_data[:,0]/wl_mul
+        n_substrate = n_substrate_data[:,1]
+        k_substrate = n_substrate_data[:,2]
+
+        n_film_interp = scipy.interpolate.interp1d(n_film_wl, n_film)
+        k_film_interp = scipy.interpolate.interp1d(n_film_wl, k_film)
+
+        n_substrate_interp = scipy.interpolate.interp1d(n_substrate_wl, n_substrate)
+        k_substrate_interp = scipy.interpolate.interp1d(n_substrate_wl, k_substrate)
+
+        # print("theta_i")
+
+        if hasattr(wavelength, "__len__"):
+            if len(wavelength == 1):
+                wavelength = np.ones(len(theta_i))*wavelength
+
+        wl_test = np.arange(300,800)/wl_mul
+        n_film_test = n_film_interp(wl_test) + 1j*k_film_interp(wl_test)
+        n_substrate_test =  n_substrate_interp(wl_test) + 1j*k_substrate_interp(wl_test)
+
+        n_film_complex = n_film_interp(wavelength) + 1j*k_film_interp(wavelength)
+        n_substrate_complex = n_substrate_interp(wavelength) + 1j*k_substrate_interp(wavelength)
+
+        print("n_film_complex", n_film_complex)
+        print("n_substrate_complex",n_substrate_complex)
+
+        if plot_debug:
+            plt.figure()
+            plt.plot(wl_test, n_film_test.real, label=r'$\mathcal{R}(n_{film})$')
+            plt.plot(wl_test, n_film_test.imag, label=r'$\mathcal{I}(n_{film})$')
+            plt.plot(wl_test, np.abs(n_film_test), label=r'$|n_{film}|$')
+            plt.xlabel("Wavelength")
+            plt.legend()
+            plt.show()
+            plt.figure()
+            plt.plot(wl_test, n_substrate_test.real, label=r'$\mathcal{R}(n_{metal})$')
+            plt.plot(wl_test, n_substrate_test.imag, label=r'$\mathcal{I}(n_{metal})$')
+            plt.plot(wl_test, np.abs(n_substrate_test), label=r'$|n_{metal}|$')
+            plt.xlabel("Wavelength")
+            plt.legend()
+            plt.show()
+
+    else:
+        n_film_complex=n_film_data
+        n_substrate_complex=n_substrate_data
+    
+    r_p, r_s, transmission_angle = compute_fresnel_thin_film(theta_i, n_film_complex, film_thickness,
+                                        n_substrate_complex, wavelength, reflection)
     # print("r_p", r_p)
     # print("r_s", r_s)
     # print(r_p.shape)
@@ -269,7 +287,6 @@ def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness,
     fresnel_matrix = np.zeros([np.size(r_p), 3, 3], dtype=np.complex64)
 
     for n in range(np.size(r_p)):
-        # print(r_p[n])
         fresnel_matrix[n, :, :] = np.array([
         [r_p[n], 0, 0],
         [0, r_s[n], 0],
@@ -277,9 +294,14 @@ def protected_mirror_fresnel_matrix(theta_i, n_film_data, film_thickness,
     ])
     print("fresnel_matrix.shape", fresnel_matrix.shape)
 
-    return fresnel_matrix
+    if not reflection:
+        return fresnel_matrix, transmission_angle
+    else:
+        return fresnel_matrix
 
-def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal, wavelength):
+
+def compute_fresnel_thin_film(theta_1, n_film, d, n_metal,
+                                      wavelength, reflection=True):
     n1 = 1
     n2 = n_film
     n3 = n_metal
@@ -289,17 +311,24 @@ def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal, wavelength):
     sin_theta2 = np.sin(theta_1)*n1/n2
     cos_theta2 = (1 - sin_theta2**2)**0.5
 
+    # reflection from first surface
     r_12p = (n1/cos_theta1 - n2/cos_theta2)/(n1/cos_theta1 + n2/cos_theta2)
     r_12s = (n1*cos_theta1 - n2*cos_theta2)/(n1*cos_theta1 + n2*cos_theta2)
 
+    # transmission through first surface
     t_12p = (2*n1/cos_theta1)/(n1/cos_theta1 + n2/cos_theta2);
     t_12s = (2*n1*cos_theta1)/(n1*cos_theta1 + n2*cos_theta2);
 
     sin_theta3 = sin_theta2*n2/n3
     cos_theta3 = (1 - sin_theta3**2)**0.5
 
+    # reflection from second surface (e.g. film-silver interface)
     r_2p = (n2/cos_theta2 - n3/cos_theta3)/(n2/cos_theta2 + n3/cos_theta3);
     r_2s = (n2*cos_theta2 - n3*cos_theta3)/(n2*cos_theta2 + n3*cos_theta3);
+
+    # transmission through second surface 
+    t_2p = (2*n1/cos_theta2)/(n1/cos_theta2 + n2/cos_theta3);
+    t_2s = (2*n1*cos_theta2)/(n1*cos_theta2 + n2*cos_theta3);
 
     beta_complex = (2*np.pi/wavelength)*d*n2*cos_theta2
 
@@ -307,7 +336,15 @@ def compute_fresnel_protected_mirror(theta_1, n_film, d, n_metal, wavelength):
     rp_total = (r_12p + r_2p*np.exp(1j*2.*beta_complex))/(1+r_12p*r_2p*np.exp(1j*2.*beta_complex))
     rs_total = (r_12s + r_2s*np.exp(1j*2.*beta_complex))/(1+r_12s*r_2s*np.exp(1j*2.*beta_complex))
 
-    return np.squeeze(rp_total), np.squeeze(rs_total)
+    tp_total = (t_12p + t_2p*np.exp(1j*2.*beta_complex))/(1+t_12p*t_2p*np.exp(1j*2.*beta_complex))
+    ts_total = (t_12s + t_2s*np.exp(1j*2.*beta_complex))/(1+t_12s*r_2s*np.exp(1j*2.*beta_complex))
+
+    transmission_angle = np.arccos(cos_theta3)
+
+    if reflection:
+        return np.squeeze(rp_total), np.squeeze(rs_total), transmission_angle
+    else:
+        return np.squeeze(tp_total), np.squeeze(ts_total), transmission_angle
 
 def compute_fresnel_protected_mirror_old(theta_1, n_film, d, n_metal, wavelength):
     if hasattr(n_film, "__len__"):

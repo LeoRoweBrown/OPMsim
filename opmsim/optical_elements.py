@@ -26,7 +26,9 @@ class Element():
 class SineLens(Element):
     """Ideal lens that meets Abbe sine condition"""
     def __init__(self, NA, focal_length, n=1, yAxis_rotation = 0, binning_method=False,
-            D=None, show_plots=False, trace_after=True, update_history=False):
+            D=None, show_plots=False, trace_after=True,
+            update_history=False, interface_ris = None, 
+            ar_coating_ri=None, ar_coating_thickness=None):
         self.type = 'SineLens'
         self.focal_length = focal_length
         self.NA = NA  # we use effective NA (as if lens were in air)
@@ -38,13 +40,83 @@ class SineLens(Element):
         self.show_plots = show_plots
         self.trace_after = trace_after
         self.update_history = update_history
+        self.interface_ris = interface_ris  # refractive index of media 
+                                            # in interfaces (e.g. air glass)
+        self.ar_coating_ri = ar_coating_ri  # RI of coating
+        self.ar_coating_thickness = ar_coating_thickness  # coating thickness (m)
 
         if D is None:
-            self.D = 2*focal_length*NA*n
-        elif abs(D - 2*focal_length*NA*n) > 1e-6*D:
+            self.D = 2*focal_length*NA#*n
+        elif abs(D - 2*focal_length*NA) > 1e-6*D:
             raise ValueError("D, NA and f are not in agreement")
         else:
             self.D = D
+
+    def normalize(self, v, axis=1):
+        norm = np.linalg.norm(v, axis=axis).reshape(v.shape[0],1,1)
+        norm[norm == 0] = 1
+        return v/norm
+    
+    def compute_transmission(self, rays):
+        """yet to implement wavelength dependence"""
+
+        n0 = self.n
+
+        if self.interface_ris is None and self.ar_coating_ri is None:
+            return
+
+        # get incident angles
+        if rays.isMeridional:
+            rays.meridional_transform(inverse=True)
+    
+        N = np.array([1, 0, -1])  # flat tip
+        N = N/np.linalg.norm(N)
+        N = N.reshape(1,3,1)
+
+        p = np.cross(rays.k_vec, N, axis=1)  # get p vector (kxN) (s wave comp)
+        kdotN = np.sum(rays.k_vec * N, 1)
+        np.abs(kdotN.squeeze())  
+
+        r = np.cross(rays.k_vec, p, axis=1)  # get r vector (kxp) (p wave comp)
+
+        # normalize since we compute the angles without the normalization factor...
+        p = self.normalize(p)  
+        r = self.normalize(r)
+
+        parallel = r[:,:,0]
+        senkrecht = p[:,:,0]
+
+        # compute angles
+        kxN = np.cross(rays.k_vec, N, axis=1)
+        sin_mr_1theta = np.linalg.norm(abs(kxN), axis=1)
+        theta_i = np.arcsin(sin_mr_1theta)
+
+        ps_project = optical_matrices.ps_projection_matrix(
+            parallel, senkrecht, np.squeeze(rays.k_vec))
+        ps_project_inv = optical_matrices.ps_projection_matrix(
+            parallel, senkrecht, np.squeeze(rays.k_vec), inverse=True)
+
+        # first surface transmission
+        if self.ar_coating_ri is not None:
+            mat_t, theta_i_after = optical_matrices.thin_film_fresnel_matrix(
+                theta_i, self.ar_coating_ri,
+                self.ar_coating_thickness,
+                self.interface_ris[0], 
+                wavelength=rays.lda, reflection=False)
+        else:
+            mat_t, theta_i_after = optical_matrices.fresnel_matrix(
+                theta_i, n0, self.interface_ris[0], reflection=False)
+        
+        # additional surfaces
+        for i in range(len(self.interface_ris)-1):
+            fresnel_mat, theta_i_after = optical_matrices.fresnel_matrix(theta_i,
+                self.interface_ris[i], self.interface_ris[i+1], reflection=False)
+            mat_t = fresnel_mat @ mat_t
+
+        shape_before = np.shape(rays.transfer_matrix)
+        rays.transfer_matrix = (ps_project_inv @ mat_t @ ps_project).reshape(shape_before)
+        print(np.shape(rays.transfer_matrix))
+        
 
     def apply_matrix(self, rays):
         if self.update_history: rays.update_history()
@@ -57,6 +129,10 @@ class SineLens(Element):
             # print("before rotating rho" , rays.rho)
             self.rotate_ray_y(rays)  # for angled lenses i.e. O3
             if self.update_history: rays.update_history(("x_axis rotation %.2f rads before lens" % self.yAxis_rotation))
+        
+        # fresnel reflection alla Sommernes et al.
+        self.compute_transmission(rays)
+
         if not rays.isMeridional:
             rays.meridional_transform()
 
@@ -70,6 +146,8 @@ class SineLens(Element):
 
         # this condition means first surface is flat (parallel/collimated incoming rays)
         if all(abs(old_theta[np.invert(rays.escaped)]) < 1e-10):  # soft inequality for theta = 0
+            print("max rho flat", np.max(rays.rho))
+
             print("FLAT REFRACTION")
 
             # print(rays.rho)
@@ -129,6 +207,8 @@ class SineLens(Element):
             # print(("rho after", rays.rho))
             # print("f", self.focal_length)
             # plot x y 
+            print("max rho curved", np.max(rays.rho))
+
             x = np.sin(rays.theta)*np.cos(rays.phi)
             y = np.sin(rays.theta)*np.sin(rays.phi)
 
@@ -160,19 +240,6 @@ class SineLens(Element):
                 # print("f:", self.focal_length)
                 # print("rho/f:", rays.rho/self.focal_length)
 
-            # plt.figure()
-            # plt.plot(rays.theta)
-            # plt.title("theta before refraction")
-            # plt.show()
-            # plt.figure()
-            # plt.plot(np.sin(rays.theta))
-            # plt.title("sine theta before refraction")
-            # plt.show()
-            # plt.figure()
-            # plt.plot(rays.rho)
-            # plt.title("actual rho")
-            # plt.show()
-
             new_theta = rays.theta - lens_theta
             # plt.figure()
             # plt.plot(new_theta)
@@ -182,22 +249,11 @@ class SineLens(Element):
             # avoid negative values from floating point error? later me: "this makes no sense"
             lens_theta[np.abs(lens_theta) < 1e-9] = 0  
 
-            # if abs(rays.rho) > self.D/2:  # Ray escapes system
-            # escape_mask_na = abs(np.sin(rays.theta)) > abs(self.sine_theta)
-            # now do things with angle -- avoids wrap-around issue hopefully?
-            escape_mask_na = abs(rays.theta) > np.arcsin(self.sine_theta)  # replace the 
+            # reject by angle not sine of angle -- avoids wrap-around issue hopefully?
+            escape_mask_na = abs(rays.theta) > np.arcsin(self.sine_theta)
             rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
             if any(escape_mask_na):
                 print(np.sum(escape_mask_na), "escaped from NA mask")
-                # print("sine_theta", self.sine_theta)
-                # print("max sin(theta)", np.max(np.sin(np.abs(rays.theta))))
-
-            # plt.figure()
-            # plt.scatter(rays.phi, rays.theta)
-            # plt.show()
-            # plt.figure()
-            # plt.scatter(rays.phi[np.invert(rays.escaped)], rays.theta[np.invert(rays.escaped)])
-            # plt.show()
 
             rays.theta = new_theta  # assign new theta
 
@@ -393,12 +449,19 @@ class FlatMirror():
         self.mirror_type = 'perfect'  # e.g. fresnel, protected
         self.rot_y = rot_y  # rotation in y 
         self.n_film_file = n_film_file
-        self.n_film_data = np.genfromtxt(self.n_film_file, delimiter='\t')
-        self.n_film_data = self.n_film_data[1:,:]  # remove headers 
+        if perfect_mirror:
+            self.n_film_data = None
+        else:
+            self.n_film_data = np.genfromtxt(self.n_film_file, delimiter='\t')
+            self.n_film_data = self.n_film_data[1:,:]  # remove headers
+        
         self.film_thickness = film_thickness
         self.n_metal_file = n_metal_file
-        self.n_metal_data = np.genfromtxt(self.n_metal_file, delimiter='\t')
-        self.n_metal_data = self.n_metal_data[1:,:]
+        if perfect_mirror:
+            self.n_metal_data = None
+        else:
+            self.n_metal_data = np.genfromtxt(self.n_metal_file, delimiter='\t')
+            self.n_metal_data = self.n_metal_data[1:,:]
         self.perfect_mirror = perfect_mirror
         self.reflectance = reflectance
         self.retardance = retardance  # if false, absolute value of rs and rp used
@@ -569,8 +632,11 @@ class FlatMirror():
                 [0,0,0]
             ])
             print("USING AIRY SUM MIRROR")
-            M_fresnel = optical_matrices.protected_mirror_fresnel_matrix(
+            M_fresnel = optical_matrices.thin_film_fresnel_matrix(
                 theta_i, self.n_film_data, self.film_thickness, self.n_metal_data, rays.lda)
+            if not self.retardance:  # ignore retardance (absolute reflectivity)
+                print("IGNORING IMAGINARY PARTS IN REFLECTANCE I.E. RETARDANCE/POLARISATION CHANGE")
+                M_fresnel = np.absolute(M_fresnel)
             # print(np.abs(M_fresnel))
 
 

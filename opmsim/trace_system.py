@@ -12,6 +12,7 @@ from .tools import graphics
 from . import anisotropy
 
 def count_lenses(elements):
+    # number of lenses to determine if final wavefront is curved
     count = 0
     for i, element in enumerate(elements):
         if element.type == 'SineLens':
@@ -20,6 +21,18 @@ def count_lenses(elements):
 
 # @profile
 def trace_rays(elements, source, options):
+    """
+    trace the rays through the system and calculate the transfer matrix
+    so that we can trace E vectors separately and efficiently at the 
+    end exploiting numpy C libraries
+
+    parameters:
+    elements (list<Element obj>): list of element objects (see optical_elements.py)
+    source (DipoleSource obj): dipole_source object from dipole_source.py
+    options (dict): options for ray tracing simulation
+    """
+
+
     max_radius=None
     if count_lenses(elements) % 2 == 0:
         is_curved_pupil = True
@@ -35,14 +48,9 @@ def trace_rays(elements, source, options):
 
     if options['calculate_entrace_pupil']:
         initial_rays = deepcopy(rays)
-    # trace the rays through the system and calculate the 
-    # transfer matrix so that we can trace E vectors separately
-    # but efficiently at the end
-    #keep_history = False
-    #if options['draw_rays']:
-         #keep_history = True
 
     for i, element in enumerate(elements):
+        print("ELEMENT:", element)
         rays = element.apply_matrix(rays)#, keep_history=keep_history)
         # plot? 3d vector diagram
         if 'vector_plots' in options:
@@ -51,19 +59,22 @@ def trace_rays(elements, source, options):
             elif i in options['vector_plots']:
                 rays.quiver_plot()
 
+    # apply inverse meridional transform or transforms 
+    # to coordinates on sphere if wavefront curved
     rays.finalize_rays_coordinates()#inverse_meridional=False)
+
+    # remove rays that are marked as escaped during the tracing
     rays.remove_escaped_rays()
 
+    # Apply transfer matrix to E-field vector
     rays.transfer_matrix = rays.transfer_matrix.reshape((1,rays.n_final,3,3))
     rays.E_vec = rays.transfer_matrix @ rays.E_vec
 
     source.emission_scaling = source.emission_scaling.reshape((rays.E_vec.shape[0],1,1,1))
 
     rays.get_intensity(source.emission_scaling)
-    # I_vec = np.real(rays.E_vec*np.conj(rays.E_vec))*(source.emission_scaling)# /rays.n  # scale by ray count
-    # rays.I_total = np.sum(I_vec, axis=0)  # sum over dipoles
-    # rays.alternative_minimum = np.min(np.concatenate((rays.I_total[:,0], rays.I_total[:,1])))
-    # print("source.emission_scaling", source.emission_scaling)
+    
+
     if source.emission_scaling.squeeze().size > 1:
         plt.figure()
         plt.hist(source.emission_scaling.squeeze())
@@ -72,17 +83,7 @@ def trace_rays(elements, source, options):
 
     detector.final_energy = rays.I_total_norm
 
-    kx = np.sin(rays.theta)*np.cos(rays.phi)
-    ky = np.sin(rays.theta)*np.sin(rays.phi)
-    kz = np.cos(rays.theta)
-
-    # for plotting with limiting NA  -- maybe check this, seems to use last NA
-    # element = elements[-1]
-    # i=0
-    # changed, use first NA to define the boundary..
-    # while element.type != 'SineLens':
-    #     element = elements[-1-i]
-    #     i += 1
+    # for plotting with limiting NA and showing collection NA as boundary
     element = elements[0]
     detector.limiting_NA = element.NA
     detector.limiting_D = element.D
@@ -96,8 +97,9 @@ def trace_rays(elements, source, options):
     print("Limiting radius for detector:", detector.max_r)
     print("Energy ratio (efficiency):", detector.final_energy/rays.initial_energy)
     print("Total energy per dipole per ray:", detector.final_energy)
-    # detector.energy_per_dipole = rays.final_energy/source.n_dipoles
+
     detector.relative_collection_efficiency = detector.final_energy/rays.initial_energy
+    # equivalent to CE ideally
     detector.scaled_relative_collection_efficiency = \
         rays.emission_efficiency*detector.relative_collection_efficiency
     detector.emission_efficiency = rays.emission_efficiency
@@ -147,9 +149,6 @@ def trace_rays(elements, source, options):
             initial_detector = Detector(curved=True)
         initial_rays.finalize_rays_coordinates()  # does this for k_vec only
 
-        # set lost rays E to zero in entrance pupil (removed)
-        # initial_rays.set_zero_escaped_rays(rays.escaped)
-
         # remove lost rays to reduce compute time on applying coord tf matrix
         lost_rays = initial_rays.remove_escaped_rays(rays.escaped)
         
@@ -157,6 +156,7 @@ def trace_rays(elements, source, options):
         initial_rays.get_intensity(source.emission_scaling)
 
         initial_detector.detect_rays(initial_rays)
+        initial_detector.n_dipoles = source.n_dipoles
         initial_detector.isinitial = True
 
         return detector, initial_detector

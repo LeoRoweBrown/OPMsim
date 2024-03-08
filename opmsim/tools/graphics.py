@@ -31,7 +31,7 @@ class PupilPlotObject():
             fill_zeroes=False, scale_range=None,
             rotate_90=False, caption_text=None, max_r_in=None,
             use_circle_path=False, add_autoscale_plots=False,
-            font_sizes=[14,12,11]):
+            font_sizes=[14,12,11], draw_NA_circle=None):
         """tricontourf for plotting, and a polar transformation"""
 
         if len(self.x) < 4:
@@ -192,6 +192,11 @@ class PupilPlotObject():
             ax.add_patch(circ)
         else:
             plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
+
+        if draw_NA_circle is not None:
+            # draw_NA_circle is the radius of the circle to draw (sin(theta) or rho)
+            plt.plot(draw_NA_circle*np.cos(phi_line), draw_NA_circle*np.sin(phi_line), color='k', zorder=2, linestyle='--')    
+            
         ax.set_aspect('equal')
         ax.axis('off')
         ax.autoscale(True)
@@ -218,6 +223,11 @@ class PupilPlotObject():
             ax2.add_patch(circ)   
         else: 
             plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k',zorder=4)
+
+        if draw_NA_circle is not None:
+            # draw_NA_circle is the radius of the circle to draw (sin(theta) or rho)
+            plt.plot(draw_NA_circle*np.cos(phi_line), draw_NA_circle*np.sin(phi_line), color='k', zorder=2, linestyle='--')  
+
         ax2.set_aspect('equal')
         ax2.axis('off')
         ax2.autoscale(True)
@@ -244,6 +254,11 @@ class PupilPlotObject():
             ax3.add_patch(circ) 
         else:
             plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k',zorder=5)
+
+        if draw_NA_circle is not None:
+            # draw_NA_circle is the radius of the circle to draw (sin(theta) or rho)
+            plt.plot(draw_NA_circle*np.cos(phi_line), draw_NA_circle*np.sin(phi_line), color='k', zorder=2, linestyle='--')        
+
         ax3.set_aspect('equal')
         ax3.axis('off')
         ax3.autoscale(True)
@@ -258,14 +273,14 @@ class PupilPlotObject():
         y = 1.001
 
         if add_autoscale_plots:
-            fig = self.plot_autoscale(fig)
+            fig = self.plot_autoscale(fig, draw_NA_circle=draw_NA_circle)
 
         fig.suptitle(title,wrap=True)#,y=y)
 
         fig.text(.5, -0.05, caption_text, ha='center', fontsize=13)
 
-
-        fig.tight_layout()
+        fig.set_tight_layout(True)
+        # fig.tight_layout()
         # plt.subplots_adjust(wspace=0, hspace=-10)
         # plt.subplots_adjust(right=0, bottom=0)
         #plt.autoscale(True)
@@ -282,114 +297,131 @@ class PupilPlotObject():
         self.figure.savefig(save_dir, bbox_inches='tight')
 
     def plot_autoscale(self, fig, rotate_90=False, use_circle_path=False,
-                    max_r_in=None,pad=0.04, cmap=None, font_sizes=[14,12,11]):
-            ax = fig.add_subplot(1,6,4)
+                    max_r_in=None,pad=0.04, cmap=None, font_sizes=[14,12,11],
+                    draw_NA_circle=None):
+        """TODO reuse functions more, tidy up.. it's a mess"""
+        ax = fig.add_subplot(1,6,4)
 
-            if cmap is None:
-                #cmap=matplotlib.cm.get_cmap('autumn_r')
-                cmap=matplotlib.colormaps['autumn_r']
+        if cmap is None:
+            #cmap=matplotlib.cm.get_cmap('autumn_r')
+            cmap=matplotlib.colormaps['autumn_r']
 
-            (x, y) = self.x, self.y
-            (data_x, data_y, data_total) =  self.data_x,\
-                self.data_y, self.data_total
-            
-            max_r = np.max([np.max(x), np.max(y), abs(np.min(x)), abs(np.min(y))])
-            print("max_r_in", max_r_in, "max_r", max_r)
+        (x, y) = self.x, self.y
+        (data_x, data_y, data_total) =  self.data_x,\
+            self.data_y, self.data_total
+        
+        max_r = np.max([np.max(x), np.max(y), abs(np.min(x)), abs(np.min(y))])
+        print("max_r_in", max_r_in, "max_r", max_r)
 
-            if max_r_in is not None:
-                max_r = max([max_r_in, max_r])
+        if max_r_in is not None:
+            max_r = max([max_r_in, max_r])
 
-            # draw line instead
-            r_line = np.array([max_r]*100)
-            phi_line = np.linspace(0, 2*np.pi,100)
+        # draw line instead
+        r_line = np.array([max_r]*100)
+        phi_line = np.linspace(0, 2*np.pi,100)
 
-            min_for_scale = None
-            max_for_scale = None
-            levels = 257
-            cbar_ticks = ticker.MaxNLocator(nbins=4, prune='both')
-
-
-            if rotate_90:
-                pc1 = ax.tricontourf(list(y), list(x), data_x, cmap=cmap,\
-                    levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-            else:
-                pc1 = ax.tricontourf(list(x), list(y), data_x, cmap=cmap,\
-                    levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-
-            if use_circle_path:
-                circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
-                ax.add_patch(circ)
-            else:
-                plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
-            ax.set_aspect('equal')
-            ax.axis('off')
-            ax.autoscale(True)
-            ax.set_title("X component intensity", pad=-1.5, fontsize=11)
-            
-            cb = fig.colorbar(pc1, ax=ax, fraction=0.04, pad=pad, ticks=cbar_ticks, format='%.02f',location="bottom")
-
-            cb.update_ticks()
-            # have to do this every time? makes no sense
-
-            tick_locator = ticker.MaxNLocator(nbins=4, prune='both')
-            cb.locator = tick_locator
-            cb.update_ticks()
-
-            ### y
-            ax2 = fig.add_subplot(1,6,5)
-            if rotate_90:
-                pc2 = ax2.tricontourf(list(y), list(x), data_y, cmap=cmap,\
-                    levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-            else:
-                pc2 = ax2.tricontourf(list(x), list(y), data_y, cmap=cmap,\
-                    levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-            if use_circle_path:
-                circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
-                ax2.add_patch(circ)   
-            else: 
-                plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k',zorder=4)
-            ax2.set_aspect('equal')
-            ax2.axis('off')
-            ax2.autoscale(True)
-            ax2.set_title("Y component intensity", pad=-1.5, fontsize=11)
-
-            cb2 = fig.colorbar(pc2, ax=ax2, fraction=0.04, pad=pad, ticks=cbar_ticks, format='%.02f',location="bottom")
-            # have to do this every time? makes no sense
-            tick_locator = ticker.MaxNLocator(nbins=4, prune='both')
-            cb2.locator = tick_locator
-            cb2.update_ticks()
+        min_for_scale = None
+        max_for_scale = None
+        levels = 257
+        cbar_ticks = ticker.MaxNLocator(nbins=4, prune='both')
 
 
-            ### total
-            ax3 = fig.add_subplot(1,6,6)
-            if rotate_90:
-                pc3 = ax3.tricontourf(list(y), list(x), data_total, cmap=cmap,\
-                    levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-            else:
-                pc3 = ax3.tricontourf(list(x), list(y), data_total, cmap=cmap,\
-                    levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-            if use_circle_path:
-                circ = Circle((0, 0), max_r*1.003,zorder=5,facecolor=None,edgecolor='k',linewidth=2)
-                ax3.add_patch(circ) 
-            else:
-                plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k',zorder=5)
-            ax3.set_aspect('equal')
-            ax3.axis('off')
-            ax3.autoscale(True)
-            ax3.set_title("Total intensity", pad=-1.5, fontsize=11)
+        if rotate_90:
+            pc1 = ax.tricontourf(list(y), list(x), data_x, cmap=cmap,\
+                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        else:
+            pc1 = ax.tricontourf(list(x), list(y), data_x, cmap=cmap,\
+                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
 
-            cb3 = fig.colorbar(pc3, ax=ax3, fraction=0.04, pad=pad, ticks=cbar_ticks, format='%.02f',location="bottom")
-            vmin_ = cb3.vmin
-            vmax_ = cb3.vmax
-            print("cb3.vmax bf", cb3.vmax)
-            if (vmax_-vmin_) < 1e-3:
-                cb3.vmax += 1e-2
+        if use_circle_path:
+            circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
+            ax.add_patch(circ)
+        else:
+            plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
 
-            tick_locator = ticker.MaxNLocator(nbins=4, prune='both')
-            cb3.locator = tick_locator
-            cb3.update_ticks()
+        if draw_NA_circle is not None:
+            # draw_NA_circle is the radius of the circle to draw (sin(theta) or rho)
+            plt.plot(draw_NA_circle*np.cos(phi_line), draw_NA_circle*np.sin(phi_line), color='k', zorder=2, linestyle='--')
 
-            return fig
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.autoscale(True)
+        ax.set_title("X component intensity", pad=-1.5, fontsize=11)
+        
+        cb = fig.colorbar(pc1, ax=ax, fraction=0.04, pad=pad, ticks=cbar_ticks, format='%.02f',location="bottom")
+
+        cb.update_ticks()
+        # have to do this every time? makes no sense
+
+        tick_locator = ticker.MaxNLocator(nbins=4, prune='both')
+        cb.locator = tick_locator
+        cb.update_ticks()
+
+        ### y
+        ax2 = fig.add_subplot(1,6,5)
+        if rotate_90:
+            pc2 = ax2.tricontourf(list(y), list(x), data_y, cmap=cmap,\
+                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        else:
+            pc2 = ax2.tricontourf(list(x), list(y), data_y, cmap=cmap,\
+                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        if use_circle_path:
+            circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
+            ax2.add_patch(circ)   
+        else: 
+            plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k',zorder=4)
+
+        if draw_NA_circle is not None:
+            # draw_NA_circle is the radius of the circle to draw (sin(theta) or rho)
+            plt.plot(draw_NA_circle*np.cos(phi_line), draw_NA_circle*np.sin(phi_line), color='k', zorder=2, linestyle='--')
+
+        ax2.set_aspect('equal')
+        ax2.axis('off')
+        ax2.autoscale(True)
+        ax2.set_title("Y component intensity", pad=-1.5, fontsize=11)
+
+        cb2 = fig.colorbar(pc2, ax=ax2, fraction=0.04, pad=pad, ticks=cbar_ticks, format='%.02f',location="bottom")
+        # have to do this every time? makes no sense
+        tick_locator = ticker.MaxNLocator(nbins=4, prune='both')
+        cb2.locator = tick_locator
+        cb2.update_ticks()
+
+
+        ### total
+        ax3 = fig.add_subplot(1,6,6)
+        if rotate_90:
+            pc3 = ax3.tricontourf(list(y), list(x), data_total, cmap=cmap,\
+                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        else:
+            pc3 = ax3.tricontourf(list(x), list(y), data_total, cmap=cmap,\
+                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        if use_circle_path:
+            circ = Circle((0, 0), max_r*1.003,zorder=5,facecolor=None,edgecolor='k',linewidth=2)
+            ax3.add_patch(circ) 
+        else:
+            plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k',zorder=5)
+
+        if draw_NA_circle is not None:
+            # draw_NA_circle is the radius of the circle to draw (sin(theta) or rho)
+            plt.plot(draw_NA_circle*np.cos(phi_line), draw_NA_circle*np.sin(phi_line), color='k', zorder=2, linestyle='--')
+
+        ax3.set_aspect('equal')
+        ax3.axis('off')
+        ax3.autoscale(True)
+        ax3.set_title("Total intensity", pad=-1.5, fontsize=11)
+
+        cb3 = fig.colorbar(pc3, ax=ax3, fraction=0.04, pad=pad, ticks=cbar_ticks, format='%.02f',location="bottom")
+        vmin_ = cb3.vmin
+        vmax_ = cb3.vmax
+        print("cb3.vmax bf", cb3.vmax)
+        if (vmax_-vmin_) < 1e-3:
+            cb3.vmax += 1e-2
+
+        tick_locator = ticker.MaxNLocator(nbins=4, prune='both')
+        cb3.locator = tick_locator
+        cb3.update_ticks()
+
+        return fig
 
 def heatmap_plot(x0, y0, data_x, data_y, title=""):
     if len(x0) < 4:

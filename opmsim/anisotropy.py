@@ -30,8 +30,9 @@ def calculate_anisotropy_IpIs(I_p, I_s):
     r = (I_p - I_s)/(I_p + 2*I_s)
     return r
 
-def theoretical_anisotropy(NA, dipole_orientation, return_intensities=False):
-    # calculate theoretical anisotropy for single dipole as a function of NA
+def theoretical_anisotropy(NA, dipole_orientation, I_p_yaxis=True, return_intensities=False):
+    # calculate theoretical anisotropy for single dipole as a function of NA,
+    # parallel axis is y
     rho_0 = np.arcsin(NA)  # assume n=1
     cos_rho = np.cos(rho_0)
 
@@ -45,12 +46,13 @@ def theoretical_anisotropy(NA, dipole_orientation, return_intensities=False):
     print("alpha:", alpha)
     print("phi:", phi)
     # in Axelrod paper, x1 is optic axis and x3 is parallel to excitation 
-    x = [ np.sin(alpha), np.cos(alpha)*np.sin(phi), \
-        np.cos(alpha)*np.cos(phi)]
-    # x = [ np.cos(alpha), np.sin(alpha)*np.sin(phi), \
-    #     np.sin(alpha)*np.cos(phi)]
+    # x = [ np.sin(alpha), np.cos(alpha)*np.sin(phi), \
+    #     np.cos(alpha)*np.cos(phi)]
+    x = [ np.sin(alpha), np.cos(alpha)*np.cos(phi), \
+        np.cos(alpha)*np.sin(phi)]
     print("x",x)
     print("K_a", K_a, "K_b", K_b, "K_c", K_c)
+
 
     I_s = K_a*x[0]*x[0] + K_c*x[1]*x[1] + K_b*x[2]*x[2]
     I_p = K_a*x[0]*x[0] + K_b*x[1]*x[1] + K_c*x[2]*x[2]
