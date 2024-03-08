@@ -2,6 +2,7 @@ from time import time
 import numpy as np
 from matplotlib import pyplot as plt
 from . import optical_matrices
+import math
 
 def mc_sampler_photoselection(N, excitation_polarisation, maxiter=10000):
     
@@ -54,14 +55,16 @@ def mc_sampler_photoselection(N, excitation_polarisation, maxiter=10000):
     # raise NotImplementedError()
 
 def uniform_mc_sampler(pdf, input_range, N, maxiter=10000, plot=True):
+    """Use Monte Carlo simulation to generate a sample from a PDF"""
     # takes normalised X~pdf(x) function and gets N points according to
     # range of x - {input range[0], input range[1]}
     print("Sampling %d points from PDF (Monte Carlo Rejection method)" % N)
     accepted_points = [0]*N
     input_range[0]
-    # normalise pdf
     pdf_x_points = np.linspace(input_range[0], input_range[1], 20)
-    norm = np.trapz(pdf(pdf_x_points), pdf_x_points)
+    plot_norm = np.trapz(pdf(pdf_x_points), pdf_x_points)
+    # normalise pdf to 0-1 for p_rand
+    norm = np.max(pdf(pdf_x_points))
 
     n = 0
     i = 0
@@ -74,13 +77,13 @@ def uniform_mc_sampler(pdf, input_range, N, maxiter=10000, plot=True):
             n += 1
         i += 1
     if plot:
-        plt.hist(accepted_points, density=True)
+        plt.hist(accepted_points, bins=pdf_x_points, density=True)
         plot_x = np.linspace(input_range[0], input_range[1], 20)
-        plt.plot(pdf_x_points, pdf(plot_x)/norm,label='PDF')
+        plt.plot(pdf_x_points, pdf(plot_x)/plot_norm,label='PDF')
         plt.legend()
         plt.xlabel(r'$\theta$ (rad)')
         plt.ylabel('Normalised frequency')
-    return accepted_points
+    return np.array(accepted_points)
 
 def uniform_points_on_sphere(NA=1, point_count=5000,\
     method='uniform_phi_inbetween', hemisphere=True):
@@ -187,3 +190,32 @@ def uniform_points_on_sphere(NA=1, point_count=5000,\
     print("expected area sum", expected_area)
 
     return (phi_k, theta_k, areas_usingcaps)
+
+def fibonacci_sphere_rays(NA=1, samples=1000):
+    samples *= 2  # account for hemisphere
+    points = np.zeros((samples, 3))
+    phi = np.pi * (np.sqrt(5.) - 1.)  # golden angle in radians
+
+    for i in range(samples):
+        y = 1 - (i / float(samples - 1)) * 2  # y goes from 1 to -1
+        radius = np.sqrt(1 - y * y)  # radius at y
+
+        theta = phi * i  # golden angle increment
+
+        x = np.cos(theta) * radius
+        z = np.sin(theta) * radius
+
+        points[i,:] = [x,y,z]
+        # points.append((x, y, z))
+    
+    # cartesian to polar
+    # print("points ", points)
+    mask = points[:,2] > 0
+    theta_k = np.arccos(points[mask,2])
+    phi_k = np.arctan2(points[mask,1],points[mask,0])
+    mask_NA = np.sin(theta_k) < NA
+    plt.figure()
+    plt.scatter(phi_k[mask_NA], theta_k[mask_NA])
+    plt.show()
+
+    return (phi_k[mask_NA], theta_k[mask_NA])

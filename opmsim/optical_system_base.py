@@ -13,12 +13,19 @@ from . import anisotropy
 class OpticalSystem():
     def __init__(self, title, elements, source=None, options={}):
         """
-        options:
+        title (string): description of simulation (not used in plotting)
+        elements (list<Element obj>): list of element objects (see optical_elements.py)
+        source (DipoleSource obj): dipole_source object from dipole_source.py
+
+        options (dict):
             'ray_count': (int) number of rays to trace
-            'vector_plot': (list) indices of elements for which to plot ray diagrams
+            'vector_plot': (list or bool) indices of elements for which to plot ray 
+                diagrams, or if true, make quiver plots after each element,
             'show_input_rays': (bool) whether to display figure of rays from source
             'calculate_entrance_pupil' (bool) whether to plot initial field in O1 space
             'entrance_pupil_flat' (bool) if previous is true, whether to plot curved or flat pupil of O1
+                    calculate_entrance_pupil (bool): make another detector object for the 
+                                        initial rays at the entrance pupil
         """
         init_start = time.time()
         self.title = title
@@ -31,7 +38,8 @@ class OpticalSystem():
             'calculate_entrace_pupil': True,
             'entrance_pupil_flat': False,  # for tracing to first surface, to show field on O1
             'draw_rays': False,
-            'max_rays_stored': 200
+            'max_rays_stored': 200,
+            'ray_dist': "uniform"
         }
         for key in options:
             self.options[key] = options[key]
@@ -52,13 +60,17 @@ class OpticalSystem():
                 elements[n].update_history = True
 
 
-        source.get_rays_uniform_rings(O1.sine_theta, O1.focal_length, self.options['ray_count'])
+        source.get_rays_uniform_rings(O1.sine_theta, O1.focal_length,
+                                       self.options['ray_count'], ray_dist=self.options['ray_dist'])
+        
+        
         if self.options['show_input_rays']:
             source.display_pupil_rays()
         source.rays.num_rays_saved = self.options['max_rays_stored']
 
         init_time = time.time() - init_start
         print("initialisation time in system %fs" % init_time)
+
     
     def trace(self):
         trace_start = time.time()
@@ -87,11 +99,8 @@ class OpticalSystem():
 
         if initial_pupil:
             self.plot_options['title'] += " -- intensity incident on O1"
-        if self.plot_options['add_sim_details']:
-            self.plot_options['title'] += "\n" + sim_details
         # only used on 'runtime' to edit the title, but this dicitonary is
         # passed as kwargs to plot_pupil... messy I know
-        self.plot_options.pop('add_sim_details', None)
 
         pupil = self.detector.plot_pupil(**self.plot_options)  # plot pupil field
 

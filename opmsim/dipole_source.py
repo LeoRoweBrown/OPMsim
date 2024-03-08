@@ -196,9 +196,9 @@ class DipoleSource:
         # plot points with y < 0, i.e. the 'behind' points
         # ax_xz.scatter(z[np.invert(y_mask)], x[np.invert(y_mask)],\
         #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
-        ax_xz.set_title("Distribution of dipole points \n on sphere (XZ)")
-        ax_xz.set_xlabel("x")
-        ax_xz.set_ylabel("z")
+        ax_xz.set_title("Distribution of dipole points \n on sphere (XZ)", fontsize = 18)
+        ax_xz.set_xlabel("x", fontsize = 16)
+        ax_xz.set_ylabel("z", fontsize = 16)
         ax_xz.set_aspect('equal')
 
         ax_xy = f2d.add_subplot(132)
@@ -210,13 +210,13 @@ class DipoleSource:
         facec[:,3] *= alphas
         facecolors = np.array(['none']*len(x))
         facecolors[z_mask] = 'k'
-        ax_xy.set_title("Distribution of dipole points \n on sphere (XY)")
+        ax_xy.set_title("Distribution of dipole points \n on sphere (XY)", fontsize = 18)
         ax_xy.scatter(x, y, s=5, facecolors=facec, edgecolors=edgec)
         # ax_xy.scatter(y[z_mask], x[z_mask], s=5, alpha=alphas)
         # ax_xy.scatter(y[np.invert(z_mask)], x[np.invert(z_mask)],\
         #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
-        ax_xy.set_xlabel("x")
-        ax_xy.set_ylabel("y")
+        ax_xy.set_xlabel("x", fontsize = 16)
+        ax_xy.set_ylabel("y", fontsize = 16)
         ax_xy.set_aspect('equal')
 
         ax_zy = f2d.add_subplot(133)
@@ -228,14 +228,14 @@ class DipoleSource:
         facec[:,3] *= alphas
         facecolors = np.array(['none']*len(x))
         facecolors[x_mask] = 'k'
-        ax_zy.set_title("Distribution of dipole points \n on sphere (ZY)")
+        ax_zy.set_title("Distribution of dipole points \n on sphere (ZY)", fontsize = 18)
         ax_zy.scatter(z, y, s=5, facecolors=facec, edgecolors=edgec)
         # ax_zy.scatter(z[x_mask], y[x_mask], s=5, alpha=alphas)
         # ax_zy.scatter(z[np.invert(x_mask)], y[np.invert(x_mask)],\
         #     s=4, alpha=alphas, facecolors='none', edgecolors='blue')
 
-        ax_zy.set_xlabel("z")
-        ax_zy.set_ylabel("y")
+        ax_zy.set_xlabel("z", fontsize = 16)
+        ax_zy.set_ylabel("y", fontsize = 16)
         ax_zy.set_aspect('equal')
         f2d.tight_layout()
 
@@ -302,25 +302,25 @@ class DipoleSource:
         f2d = plt.figure(figsize=(14, 7))
         ax_xz = f2d.add_subplot(131)
         ax_xz.scatter(z, x, s=2)
-        ax_xz.set_title("Distribution of ray points \n on sphere (ZX)")
-        ax_xz.set_xlabel("z")
-        ax_xz.set_ylabel("x")
+        ax_xz.set_title("Distribution of ray points \n on sphere (ZX)", fontsize = 12)
+        ax_xz.set_xlabel("z", fontsize = 11)
+        ax_xz.set_ylabel("x", fontsize = 11)
         ax_xz.set_aspect('equal')
         for i in range(len(z)):
             ax_xz.plot([0,z[i]],[0,x[i]], color=[0,0,0,0.15])
         ax_xy = f2d.add_subplot(132)
-        ax_xy.set_title("Distribution of ray points \n on sphere (YX)")
+        ax_xy.set_title("Distribution of ray points \n on sphere (YX)", fontsize = 12)
         ax_xy.scatter(y, x, s=2)
-        ax_xy.set_xlabel("y")
-        ax_xy.set_ylabel("x")
+        ax_xy.set_xlabel("y", fontsize = 11)
+        ax_xy.set_ylabel("x", fontsize = 11)
         ax_xy.set_aspect('equal')
         for i in range(len(y)):
             ax_xy.plot([0,y[i]],[0,x[i]], color=[0,0,0,0.15])
         ax_zy = f2d.add_subplot(133)
-        ax_zy.set_title("Distribution of ray points \n on sphere (YZ)")
+        ax_zy.set_title("Distribution of ray points \n on sphere (YZ)", fontsize = 12)
         ax_zy.scatter(z, y, s=2)
-        ax_zy.set_xlabel("z")
-        ax_zy.set_ylabel("y")
+        ax_zy.set_xlabel("z", fontsize = 11)
+        ax_zy.set_ylabel("y", fontsize = 11)
         ax_zy.set_aspect('equal')
         for i in range(len(y)):
             ax_zy.plot([0,z[i]],[0,y[i]], color=[0,0,0,0.15])
@@ -354,13 +354,33 @@ class DipoleSource:
         print("n rays 2pi = ", rays_1NA.I_total_initial.shape[0])
         
         return rays_1NA.initial_energy, areas
+        
 
     def get_rays_uniform_rings(self, NA, f, ray_count=5000,\
-        method='uniform_phi_inbetween', plot_sphere=False):
+        method='uniform_phi_inbetween', plot_sphere=False, ray_dist="uniform"):
         """ Get equal area elements in rings for uniform rays, also compute their area"""
 
-        phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
-            NA, ray_count, method)
+        if ray_dist == "uniform":
+            phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
+                NA, ray_count, method)
+        elif ray_dist == "random":
+            print("RANDOM MC RAY GENERATION")
+            phi_k = np.random.random(ray_count)*2*np.pi
+            theta_k = distribution_functions.uniform_mc_sampler(
+                    lambda t: np.sin(t), [0, np.arcsin(NA)], ray_count)
+            areas = np.ones(ray_count)*1/ray_count
+            self.plot_ray_sphere(phi_k, theta_k)
+        elif ray_dist == "fibonacci":
+            phi_k, theta_k = distribution_functions.fibonacci_sphere_rays(
+            NA, ray_count)
+            areas = np.ones(len(phi_k))*1/len(phi_k)
+            self.plot_ray_sphere(phi_k, theta_k)
+
+        #print("phi_k", phi_k)
+        #print("theta_k", theta_k)
+        plt.figure()
+        plt.scatter(phi_k,theta_k)
+        plt.show()
 
         self.NA = NA
         self.ray_area = areas  # do we need dipole_source to have this attribute?

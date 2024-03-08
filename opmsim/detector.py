@@ -58,22 +58,10 @@ class Detector():
         # print(rays.I_vec)
         self.Ix_raw = rays.I_per_dipole_xyz[:,0]
         self.Iy_raw = rays.I_per_dipole_xyz[:,1]
-        print("area scaling", rays.area_scaling.shape)
-        print("Ix_raw",self.Ix_raw.shape)
         self.Ix_area_scaled = self.Ix_raw.squeeze() * rays.area_scaling
         self.Iy_area_scaled = self.Iy_raw.squeeze() * rays.area_scaling
 
-        # print(rays.area_scaling)
-
         self.ray_phi = np.asarray(self.ray_phi, dtype=np.float64)
-
-        # plot radii to debug
-         #fig = plt.figure()
-         #plt.plot(self.ray_polar_radius)
-         #plt.title("ray radii on polar plot")
-         #plt.xlabel("ray number in list")
-         #plt.ylabel("radius")
-        # plt.show()
 
         phi_1d = self.ray_phi.squeeze()
         self.unstructured_x = self.ray_polar_radius*np.cos(phi_1d)
@@ -106,9 +94,10 @@ class Detector():
 
         self.I_total_integral = self.Ix_integral + self.Iy_integral
 
-    def plot_pupil(self, title="", show_prints=False, plot_arrow=None,
+    def plot_pupil(self, title="", show_prints=False, plot_arrow=None, add_sim_details=False,
             fill_zeroes=False, scale_range=None, rotate_90=False, caption=True, max_r_in=None,
-            use_circle_path=False, value_scale = 10, auto_scale=False,add_autoscale_plots=False):
+            use_circle_path=False, value_scale = 10, auto_scale=False,add_autoscale_plots=False,
+            draw_NA_circle=None):
         print("ray count", self.rays.n_final)
         if self.rays.n_final < 4:
             print("not enough points to plot pupil, skipping")
@@ -121,6 +110,12 @@ class Detector():
             caption_text = None
         if max_r_in is 'max_r':
             max_r_in = self.max_r
+
+        sim_details = "n_dipoles=%d, n_rays=%d (initial n_rays=%d)"\
+            % (self.n_dipoles, self.n_rays,
+                self.n_rays_initial)
+        if add_sim_details:
+            title += "\n" + sim_details
 
         if auto_scale:
             scale_range = None
@@ -135,7 +130,8 @@ class Detector():
             Ix, Iy)
         fig, pc = pupil.plot(title, show_prints, plot_arrow,
             fill_zeroes, scale_range, rotate_90, caption_text, max_r_in,
-            use_circle_path=use_circle_path,add_autoscale_plots=add_autoscale_plots)
+            use_circle_path=use_circle_path,add_autoscale_plots=add_autoscale_plots,
+            draw_NA_circle=draw_NA_circle)
         self.pupil = pupil
         return fig# pupil
 
