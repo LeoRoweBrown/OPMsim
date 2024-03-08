@@ -346,9 +346,14 @@ class DipoleSource:
         plt.show()
 
         
-    def get_2pi_energy(self, f, ray_count):
-        phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
-            1, point_count=ray_count, method='uniform_phi_inbetween',hemisphere=True)
+    def get_2pi_energy(self, f, ray_count, ray_dist='uniform_phi_inbetween'):
+        if ray_dist == "uniform":
+            phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
+                1, point_count=ray_count, method='uniform_phi_inbetween',hemisphere=True)
+        elif ray_dist == "fibonacci":
+            phi_k, theta_k, areas = distribution_functions.fibonacci_sphere_rays(
+                1, ray_count)
+            # areas = np.ones(len(phi_k))*1/len(phi_k)
         rays_1NA = PolarRays(phi_k, theta_k, f, areas, lda=self.lda_em)
         self.get_initial_efields(rays_1NA)
         print("n rays 2pi = ", rays_1NA.I_total_initial.shape[0])
@@ -371,9 +376,9 @@ class DipoleSource:
             areas = np.ones(ray_count)*1/ray_count
             self.plot_ray_sphere(phi_k, theta_k)
         elif ray_dist == "fibonacci":
-            phi_k, theta_k = distribution_functions.fibonacci_sphere_rays(
-            NA, ray_count)
-            areas = np.ones(len(phi_k))*1/len(phi_k)
+            phi_k, theta_k, areas = distribution_functions.fibonacci_sphere_rays(
+                NA, ray_count)
+            # areas = np.ones(len(phi_k))*1/len(phi_k)
             self.plot_ray_sphere(phi_k, theta_k)
 
         #print("phi_k", phi_k)
@@ -394,7 +399,7 @@ class DipoleSource:
         self.get_initial_efields(self.rays)
         # energy integrated over half sphere -- 
         # effectively the total integrated energy over 2pi (hemisphere solid angle)
-        half_sphere_energy, area_2pi = self.get_2pi_energy(f, ray_count)
+        half_sphere_energy, area_2pi = self.get_2pi_energy(f, ray_count, ray_dist)
 
         print(self.rays.I_total_initial.shape)
         # plt.figure()

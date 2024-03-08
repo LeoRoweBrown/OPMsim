@@ -214,8 +214,15 @@ def fibonacci_sphere_rays(NA=1, samples=1000):
     theta_k = np.arccos(points[mask,2])
     phi_k = np.arctan2(points[mask,1],points[mask,0])
     mask_NA = np.sin(theta_k) < NA
+
+    # calculate area on unit sphere associated with each ray
+    # 2*np.pi*(1-costheta) is cap area
+    sintheta = NA
+    costheta = (1-sintheta**2)**0.5
+    areas = np.ones(len(phi_k[mask_NA]))*2*np.pi*(1-costheta)/len(phi_k[mask_NA])
+
     plt.figure()
     plt.scatter(phi_k[mask_NA], theta_k[mask_NA])
     plt.show()
 
-    return (phi_k[mask_NA], theta_k[mask_NA])
+    return (phi_k[mask_NA], theta_k[mask_NA], areas)
