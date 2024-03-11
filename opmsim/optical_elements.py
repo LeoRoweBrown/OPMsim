@@ -152,7 +152,8 @@ class SineLens(Element):
 
             # print(rays.rho)
             # print(self.n)
-            rays.rho = rays.rho/self.n  # scale rho for immersion lens
+            # Is this right?? TODO
+            # rays.rho = rays.rho/self.n  # scale rho for immersion lens
 
             escape_mask_rho = abs(rays.rho) >= self.focal_length
             rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
@@ -284,6 +285,7 @@ class SineLens(Element):
         """ Trace by one focal length"""
         # self.n factor for water immersion objective 
         rays.rho = rays.rho + self.focal_length*np.sin(rays.theta)
+        rays.pos += rays.k_vec*self.focal_length  ## needs work TODO
         # rays.z += self.focal_length*np.cos(rays.theta)
 
     def rotate_ray_y(self, rays):

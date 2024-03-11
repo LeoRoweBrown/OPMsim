@@ -45,7 +45,7 @@ def objective_system(
     else:
         O1 = lenses[0]
     sine_halfangle = O1['NA']/O1['n']
-    source.get_rays_uniform_rings(sine_halfangle, O1['f'], ray_count)
+    source.get_rays_uniform(sine_halfangle, O1['f'], ray_count)
     source.display_pupil_rays()
 
     elements = []
@@ -132,21 +132,21 @@ def anisotropy_test_no_obj(collection_NA, collection_f, bg=False, ray_count=5000
     # source.generate_dipoles(1000)#
     excitation_polarisation = (0,0)
     source.add_dipoles((0,0))
-    source.get_rays_uniform_rings(collection_NA, collection_f, ray_count=5000)
+    source.get_rays_uniform(collection_NA, collection_f, ray_count=5000)
 
     elements_p = []
     # elements_p.append(optical_elements.LinearPolariser(excitation_polarisation[0]))
 
     system_p = {'name': 'Parallel arm anisotropy', 'elements': elements_p}
 
-    source.get_rays_uniform_rings(collection_NA, collection_f, ray_count=5000)
+    source.get_rays_uniform(collection_NA, collection_f, ray_count=5000)
 
     detector_p = trace_system.trace_rays(system_p, source)
 
     detector_p.plot_pupil(system_p['name'], fill_zeroes=bg)
 
     # reset rays/retrace rays
-    source.get_rays_uniform_rings(collection_NA, collection_f, ray_count=5000)
+    source.get_rays_uniform(collection_NA, collection_f, ray_count=5000)
 
     elements_s = []
     # elements_s.append(optical_elements.LinearPolariser(excitation_polarisation[0]+np.pi/2))
@@ -188,7 +188,7 @@ def anisotropy_measuring_system(collection_NA, collection_f, excitation_polarisa
 
     system_p = {'name': 'Parallel arm anisotropy', 'elements': elements_p}
 
-    source.get_rays_uniform_rings(collection_NA, collection_f, ray_count=5000)
+    source.get_rays_uniform(collection_NA, collection_f, ray_count=5000)
 
     init_time = time.time() - init_start
     print("initialisation time in anisotropy_measuring_system %fs" % init_time)
@@ -201,7 +201,7 @@ def anisotropy_measuring_system(collection_NA, collection_f, excitation_polarisa
     detector_p.plot_pupil(system_p['name'])
 
     # reset rays/retrace rays
-    source.get_rays_uniform_rings(collection_NA, collection_f, ray_count=5000)
+    source.get_rays_uniform(collection_NA, collection_f, ray_count=5000)
 
     elements_s = []
     elements_s.append(optical_elements.SineLens(collection_NA, collection_f))

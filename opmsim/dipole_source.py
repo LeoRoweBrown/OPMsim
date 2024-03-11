@@ -361,7 +361,7 @@ class DipoleSource:
         return rays_1NA.initial_energy, areas
         
 
-    def get_rays_uniform_rings(self, NA, f, ray_count=5000,\
+    def get_rays_uniform(self, NA, f, ray_count=5000,\
         method='uniform_phi_inbetween', plot_sphere=False, ray_dist="uniform"):
         """ Get equal area elements in rings for uniform rays, also compute their area"""
 

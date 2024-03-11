@@ -60,7 +60,7 @@ class OpticalSystem():
                 elements[n].update_history = True
 
 
-        source.get_rays_uniform_rings(O1.sine_theta, O1.focal_length,
+        source.get_rays_uniform(O1.sine_theta, O1.focal_length,
                                        self.options['ray_count'], ray_dist=self.options['ray_dist'])
         
         

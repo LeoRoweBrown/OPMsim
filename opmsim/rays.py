@@ -36,6 +36,7 @@ class PolarRays:
         self.rho = np.zeros_like(phi_array)
         self.rho_before_trace = None
         self.radius = radius
+        self.pos = np.zeros((len(phi_array), 3, 1))
         self.optical_axis = 0
         self.isMeridional = False
         self.escaped = [False]*self.n
