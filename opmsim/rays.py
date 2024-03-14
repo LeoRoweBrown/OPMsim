@@ -46,7 +46,7 @@ class PolarRays:
         # self.transfer_matrix = self.transfer_matrix.reshape(1,self.n,3,3)
         self.alternative_minimum = None  # used when E-values are set to 0 manually
         self.negative_kz = False
-        self.ray_density = self.n/np.sum(area_array)
+        self.ray_density = self.n/np.sum(area_array)  # so values dont change with ray number
 
         self.keep_history = keep_history  # actually overrided by apply_matrix which decides this..
         self.num_rays_saved = num_rays_saved
@@ -139,7 +139,7 @@ class PolarRays:
         # print("before rotate", rays.I_vec)
         self.rotate_rays_local_basis(inverse_meridional=inverse_meridional)
 
-    def get_intensity(self, scaling=1):
+    def get_intensity(self, scaling=1, scale_by_density=True):
         """
         calculate field intensity on surface for the 
         rays object scaled by photoselection
@@ -148,9 +148,15 @@ class PolarRays:
         self.I_per_dipole_xyz = np.mean(I, axis=0)
         I_per_dipole = np.sum(self.I_per_dipole_xyz, axis=1)
         I_sum = np.sum(I_per_dipole)
-        # NEED TO EXPRESS IN A WAY INDEPENDENT OF RAY COUNT/DENSITY IDEALLY!
+        # I tried scaling by "ray density" so the answers are independent
+        # of ray sampling, but ray number/solid angle appears to vary slightly
+        # so this is disabled for now
+        if scale_by_density:
+            ray_density = self.ray_density
+        else:
+            ray_density = 1
         self.I_vec = I
-        self.I_total_norm = I_sum/self.ray_density
+        self.I_total_norm = I_sum/ray_density
     
     def remove_escaped_rays(self, escaped=None):
         """is there a more efficient way of doing this?"""
