@@ -443,7 +443,7 @@ class FlatMirror():
         n_film_file='../refractive_index_data/SiO2.txt', 
         n_metal_file='../refractive_index_data/Ag.txt', 
         retardance=True, perfect_mirror=False, update_history=False,
-        fresnel_debug_savedir = None,
+        single_surface=True, fresnel_debug_savedir = None,
         reflectance=1,
         plot_debug=False):
 
@@ -451,7 +451,9 @@ class FlatMirror():
         self.mirror_type = 'perfect'  # e.g. fresnel, protected
         self.rot_y = rot_y  # rotation in y 
         self.n_film_file = n_film_file
-        if perfect_mirror:
+        self.single_surface = True
+
+        if perfect_mirror or single_surface:
             self.n_film_data = None
         else:
             self.n_film_data = np.genfromtxt(self.n_film_file, delimiter='\t')
@@ -633,9 +635,14 @@ class FlatMirror():
                 [0,1,0],
                 [0,0,0]
             ])
-            print("USING AIRY SUM MIRROR")
-            M_fresnel = optical_matrices.thin_film_fresnel_matrix(
-                theta_i, self.n_film_data, self.film_thickness, self.n_metal_data, rays.lda)
+            if self.n_film_data is None:
+                print("USING SINGLE SURFACE MIRROR")
+                M_fresnel = optical_matrices.single_suface_fresnel_matrix(
+                    theta_i, self.n_metal_data, rays.lda)
+            else:
+                print("USING AIRY SUM MIRROR")
+                M_fresnel = optical_matrices.thin_film_fresnel_matrix(
+                    theta_i, self.n_film_data, self.film_thickness, self.n_metal_data, rays.lda)
             if not self.retardance:  # ignore retardance (absolute reflectivity)
                 print("IGNORING IMAGINARY PARTS IN REFLECTANCE I.E. RETARDANCE/POLARISATION CHANGE")
                 M_fresnel = np.absolute(M_fresnel)

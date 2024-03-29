@@ -204,10 +204,79 @@ def reflection_cartesian_matrix(N):
     ]
     return reflect_matrix
 
+def single_suface_fresnel_matrix(theta_i, n_substrate_data, wavelength=500e-9,
+                                    plot_debug=False, reflection=True):
+    n_complex, _, _ = interpolate_n_from_data(theta_i, n_substrate_data, wavelength)
+
+    r_p, r_s, transmission_angle = \
+        compute_fresnel_single_surface(theta_i, n_complex, reflection)
+
+    fresnel_matrix = np.zeros([np.size(r_p), 3, 3], dtype=np.complex64)
+
+    for n in range(np.size(r_p)):
+        fresnel_matrix[n, :, :] = np.array([
+        [r_p[n], 0, 0],
+        [0, r_s[n], 0],
+        [0, 0, 1]
+    ])
+    if not reflection:
+        return fresnel_matrix, transmission_angle
+    else:
+        return fresnel_matrix
+
+def interpolate_n_from_data(theta_i, n_data, wavelength):
+    if hasattr(n_data, "__len__"):
+        wl_mul=1e9
+        n_wl = n_data[:,0]/wl_mul
+        n = n_data[:,1]
+        k = n_data[:,2]
+
+        n_interp = scipy.interpolate.interp1d(n_wl, n)
+        k_interp = scipy.interpolate.interp1d(n_wl, k)
+
+        if hasattr(wavelength, "__len__"):
+            if len(wavelength == 1):
+                wavelength = np.ones(len(theta_i))*wavelength
+
+        wl_test = np.arange(300,800)/wl_mul
+        # if just one wavelength, to visualise for debugging
+        n_complex_test = n_interp(wl_test) + 1j*k_interp(wl_test)
+
+        n_complex = n_interp(wavelength) + 1j*k_interp(wavelength)
+        print("n_complex", n_complex)
+    return n_complex, wl_test, n_complex_test
+
+def compute_fresnel_single_surface(theta_1, n_surface, reflection=True):
+    n1 = 1
+    n2 = n_surface
+
+    sin_theta1 = np.sin(theta_1)
+    cos_theta1 = np.cos(theta_1)
+    sin_theta2 = np.sin(theta_1)*n1/n2
+    cos_theta2 = (1 - sin_theta2**2)**0.5
+
+    # reflection from first surface
+    r_12p = (n1/cos_theta1 - n2/cos_theta2)/(n1/cos_theta1 + n2/cos_theta2)
+    r_12s = (n1*cos_theta1 - n2*cos_theta2)/(n1*cos_theta1 + n2*cos_theta2)
+
+    # transmission through first surface
+    t_12p = (2*n1/cos_theta1)/(n1/cos_theta1 + n2/cos_theta2)
+    t_12s = (2*n1*cos_theta1)/(n1*cos_theta1 + n2*cos_theta2)
+
+    transmission_angle = np.arccos(cos_theta2)
+
+    if reflection:
+        return np.squeeze(r_12p), np.squeeze(r_12s), transmission_angle
+    else:
+        return np.squeeze(t_12p), np.squeeze(t_12s), transmission_angle
+    
+
 def thin_film_fresnel_matrix(theta_i, n_film_data, film_thickness,
                                     n_substrate_data, wavelength=500e-9,
                                     plot_debug=False, reflection=True):
+    """get fresnel matrix for thin-film protected mirror"""
     
+    # TODO replace with interpolate_n_from_data
     if hasattr(n_film_data, "__len__") and hasattr(n_substrate_data, "__len__"):
         wl_mul=1e9
         n_film_wl = n_film_data[:,0]/wl_mul

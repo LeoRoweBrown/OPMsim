@@ -20,7 +20,7 @@ class DipoleSource:
         lda_exc <float> -- excitaiton of fluorophore/dipole (used)
                     for probability in photoselection? (to be implemented) [nm]
     Methods:
-        get_rays(self, NA)
+        get_rays(self, NA) 
     """
     def __init__(self, phi_d_array=[], alpha_d_array=[], name="source", lda_exc=None, lda_em=None):
         if lda_exc is None:
@@ -346,7 +346,7 @@ class DipoleSource:
         plt.show()
 
         
-    def get_2pi_energy(self, f, ray_count, ray_dist='uniform_phi_inbetween'):
+    def get_2pi_energy(self, f, ray_count, ray_dist='uniform'):
         if ray_dist == "uniform":
             phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
                 1, point_count=ray_count, method='uniform_phi_inbetween',hemisphere=True)
@@ -362,12 +362,12 @@ class DipoleSource:
         
 
     def get_rays_uniform(self, NA, f, ray_count=5000,\
-        method='uniform_phi_inbetween', plot_sphere=False, ray_dist="uniform"):
+        plot_sphere=False, ray_dist="uniform", ring_method='uniform_phi_inbetween', ):
         """ Get equal area elements in rings for uniform rays, also compute their area"""
 
         if ray_dist == "uniform":
             phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
-                NA, ray_count, method)
+                NA, ray_count, ring_method)
         elif ray_dist == "random":
             print("RANDOM MC RAY GENERATION")
             phi_k = np.random.random(ray_count)*2*np.pi
@@ -427,6 +427,48 @@ class DipoleSource:
 
         if plot_sphere:
             self.plot_ray_sphere(phi_k, theta_k)
+
+    def define_custom_rays(self, phi_k, theta_k, Ex, Ey, Ez):
+        """
+        Define custom rays for testing (comparison to CWD calculations)
+        """
+        print("Defining custom rays, remember to add custom_rays=True to options when running OpticalSystem!")
+        self.add_dipoles((0,0))  # dummy dipole
+        n_rays = len(phi_k)
+        areas = np.array([1]*n_rays)
+
+        rays = PolarRays(phi_k, theta_k, None, areas, lda=self.lda_em)
+
+        n_dipoles = 1
+        print("Ex",Ex)
+        print("Ey",Ey)
+        print("Ez",Ez)
+
+        rays.E_vec = np.zeros((1, n_rays, 3, 1)) 
+        rays.E_vec[0,:,:,0] = np.vstack([Ex, Ey, Ez]).T
+        # rays.E_vec = np.vstack([Ex, Ey, Ez])
+        # rays.E_vec = rays.E_vec.reshape((n_rays, 3))
+        # print("E before reshape", rays.E_vec)
+        # rays.E_vec = rays.E_vec.reshape((1, n_rays, 3, 1)) # E_vecs are (3x1)
+        rays.E_pre  = 1
+        # print(rays.E_vec.shape)
+
+        # check dot product is zero
+        print("dot product", np.sum(rays.E_vec * rays.k_vec, axis=2))
+        # print(rays.k_vec)
+        # print(rays.E_vec)
+
+        
+        self.emission_scaling = self.emission_scaling.reshape(n_dipoles,1,1,1)
+        print(self.emission_scaling.shape)
+        rays.I_total_initial = np.sum(rays.E_vec * rays.E_vec*self.emission_scaling, axis=0)
+        # energy per dipole
+        rays.get_intensity(self.emission_scaling)
+        rays.I_vec_initial = rays.I_vec
+        rays.initial_energy = rays.I_total_norm
+
+        self.rays = rays
+
 
     def simulate_rotational_diffusion(self, p_vec, D, tau, timepoints=None):
         """

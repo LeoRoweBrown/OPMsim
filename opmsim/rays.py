@@ -47,6 +47,9 @@ class PolarRays:
         self.alternative_minimum = None  # used when E-values are set to 0 manually
         self.negative_kz = False
         self.ray_density = self.n/np.sum(area_array)  # so values dont change with ray number
+        self.emission_efficiency = 1
+        self.half_sphere_energy = 1
+        self.average_energy_times_NA = 1
 
         self.keep_history = keep_history  # actually overrided by apply_matrix which decides this..
         self.num_rays_saved = num_rays_saved
@@ -162,7 +165,10 @@ class PolarRays:
         """is there a more efficient way of doing this?"""
         lost = deepcopy(self)
         if escaped is None:
+            print(self.escaped)
             not_escaped = np.invert(self.escaped)
+            print(not_escaped)
+
             escaped = self.escaped
         else:  # supply different escaped array that from self
             not_escaped = np.invert(escaped)
@@ -173,6 +179,7 @@ class PolarRays:
         self.theta = self.theta[not_escaped]
         self.rho = self.rho[not_escaped]
         self.area_scaling = self.area_scaling[not_escaped]
+        print(self.areas)
         self.areas = self.areas[not_escaped]
 
         lost.E_vec = lost.E_vec[:, escaped, :, :]

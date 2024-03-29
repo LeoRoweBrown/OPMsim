@@ -64,7 +64,8 @@ def trace_rays(elements, source, options):
     rays.finalize_rays_coordinates()#inverse_meridional=False)
 
     # remove rays that are marked as escaped during the tracing
-    rays.remove_escaped_rays()
+    if not options['keep_escaped']:
+        rays.remove_escaped_rays()
 
     # Apply transfer matrix to E-field vector
     rays.transfer_matrix = rays.transfer_matrix.reshape((1,rays.n_final,3,3))
@@ -121,8 +122,8 @@ def trace_rays(elements, source, options):
     
     # checking for cases where E not perpendicular with k (something went wrong)
     if any(np.abs(rays.I_per_dipole_xyz[:,2] > 1e-9)):  # check non-zero z comp
-        dotp = np.sum(rays.I_total * rays.k_vec, axis=1)
-        if any(np.abs(dotp) > 1e-9):
+        dotp = np.sum(rays.I_total_norm * rays.k_vec, axis=2)
+        if any(np.sum(np.abs(dotp)) > 1e-9):
             print("Error in I dot product too!")
             print(dotp)
             print("max dot prod error", max(dotp))

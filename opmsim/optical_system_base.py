@@ -39,7 +39,9 @@ class OpticalSystem():
             'entrance_pupil_flat': False,  # for tracing to first surface, to show field on O1
             'draw_rays': False,
             'max_rays_stored': 200,
-            'ray_dist': "uniform"
+            'ray_dist': "uniform",
+            'custom_rays': False,
+            'keep_escaped': False
         }
         for key in options:
             self.options[key] = options[key]
@@ -59,9 +61,9 @@ class OpticalSystem():
             for n in range(len(elements)):
                 elements[n].update_history = True
 
-
-        source.get_rays_uniform(O1.sine_theta, O1.focal_length,
-                                       self.options['ray_count'], ray_dist=self.options['ray_dist'])
+        if not options['custom_rays']:
+            source.get_rays_uniform(O1.sine_theta, O1.focal_length,
+                                        self.options['ray_count'], ray_dist=self.options['ray_dist'])
         
         
         if self.options['show_input_rays']:
