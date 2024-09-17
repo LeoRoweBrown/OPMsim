@@ -25,15 +25,26 @@ class Element():
 
 class SineLens(Element):
     """Ideal lens that meets Abbe sine condition"""
-    def __init__(self, NA, focal_length, n=1, yAxis_rotation = 0, binning_method=False,
-            D=None, show_plots=False, trace_after=True,
-            update_history=False, interface_ris = None, 
-            ar_coating_ri=None, ar_coating_thickness=None):
+    def __init__(self, NA, focal_length, 
+                front_focal_length=None, back_focal_length=None,
+                n=1, yAxis_rotation = 0, binning_method=False,
+                D=None, show_plots=False, trace_after=True,
+                update_history=False, interface_ris = None, 
+                ar_coating_ri=None, ar_coating_thickness=None,
+                compute_transmission=True, fresnel_debug_savedir=None,
+                keep_TIR=False):
         self.type = 'SineLens'
+
+        # the focal length input is the back focal length
+        self.front_focal_length = focal_length*n
         self.focal_length = focal_length
+        self.back_focal_length = focal_length
+
+
         self.NA = NA  # we use effective NA (as if lens were in air)
         self.sine_theta = NA/n
-        self.n = n
+        self.n = n  # object size
+
         self.yAxis_rotation = yAxis_rotation
         # used to determine if we stop ray tracing immediately after first surface
         self.binning_method = binning_method
@@ -44,9 +55,12 @@ class SineLens(Element):
                                             # in interfaces (e.g. air glass)
         self.ar_coating_ri = ar_coating_ri  # RI of coating
         self.ar_coating_thickness = ar_coating_thickness  # coating thickness (m)
+        self.fresnel_debug_savedir = fresnel_debug_savedir
+        self.keep_TIR = keep_TIR
 
         if D is None:
-            self.D = 2*focal_length*NA#*n
+            # D = 2*f_back*NA = 2*f_front*NA/n
+            self.D = 2*focal_length*NA#/n
         elif abs(D - 2*focal_length*NA) > 1e-6*D:
             raise ValueError("D, NA and f are not in agreement")
         else:
@@ -68,8 +82,7 @@ class SineLens(Element):
         # get incident angles
         if rays.isMeridional:
             rays.meridional_transform(inverse=True)
-    
-        N = np.array([1, 0, -1])  # flat tip
+        N = np.array([0, 0, -1])  # flat tip
         N = N/np.linalg.norm(N)
         N = N.reshape(1,3,1)
 
@@ -91,31 +104,93 @@ class SineLens(Element):
         sin_mr_1theta = np.linalg.norm(abs(kxN), axis=1)
         theta_i = np.arcsin(sin_mr_1theta)
 
+        # comparea to actual theta..
+        plt.plot(theta_i, label="theta_i")
+        plt.plot(rays.theta, label="rays.theta")
+        plt.legend()
+        plt.show()
+        
+        plt.hist(theta_i, label="theta_i")
+        plt.legend()
+        plt.show()
+        plt.hist(rays.theta,label="rays.theta")
+        plt.legend()
+        plt.show()
+
+
         ps_project = optical_matrices.ps_projection_matrix(
             parallel, senkrecht, np.squeeze(rays.k_vec))
         ps_project_inv = optical_matrices.ps_projection_matrix(
             parallel, senkrecht, np.squeeze(rays.k_vec), inverse=True)
 
-        # first surface transmission
         if self.ar_coating_ri is not None:
+            print("Thin film surface on lens")
+            raise NotImplementedError("Thin film transmission not implemented")
             mat_t, theta_i_after = optical_matrices.thin_film_fresnel_matrix(
                 theta_i, self.ar_coating_ri,
                 self.ar_coating_thickness,
                 self.interface_ris[0], 
                 wavelength=rays.lda, reflection=False)
         else:
+            # first surface transmission
             mat_t, theta_i_after = optical_matrices.fresnel_matrix(
                 theta_i, n0, self.interface_ris[0], reflection=False)
         
         # additional surfaces
         for i in range(len(self.interface_ris)-1):
+            print("Additional surfaces")
             fresnel_mat, theta_i_after = optical_matrices.fresnel_matrix(theta_i,
-                self.interface_ris[i], self.interface_ris[i+1], reflection=False)
+                self.interface_ris[i], self.interface_ris[i+1], reflection=False,
+                keep_TIR=self.keep_TIR)
             mat_t = fresnel_mat @ mat_t
 
         shape_before = np.shape(rays.transfer_matrix)
-        rays.transfer_matrix = (ps_project_inv @ mat_t @ ps_project).reshape(shape_before)
-        print(np.shape(rays.transfer_matrix))
+        # mat_t = np.identity(3)
+        e_before = rays.transfer_matrix @ rays.E_vec
+        transmission_mat = (ps_project_inv @ mat_t @ ps_project).reshape(shape_before)
+        # print("tf",(ps_project_inv @ mat_t @ ps_project))
+        rays_after = transmission_mat @ rays.k_vec
+        e_after = transmission_mat @ e_before
+
+        I_before = np.real(e_before*np.conj(e_before))
+        I_per_dipole_xyz = np.mean(I_before, axis=0)
+        I_per_dipole = np.sum(I_per_dipole_xyz, axis=1)
+        I_sum_before = np.sum(I_per_dipole)
+
+        I_after = np.real(e_after*np.conj(e_after))
+        I_per_dipole_xyz = np.mean(I_after, axis=0)
+        I_per_dipole = np.sum(I_per_dipole_xyz, axis=1)
+        I_sum_after = np.sum(I_per_dipole)
+
+        print("I_sum_before", I_sum_before)
+        print("I_sum_after", I_sum_after)
+        print("I_sum_after/I_sum_before", I_sum_after/I_sum_before)
+
+
+
+        # print(e_after.shape)
+        # print(rays.E_vec.shape)
+        # print("ray diff", rays_after-rays.k_vec)
+        # print("e diff", e_after-e_before)
+        if self.fresnel_debug_savedir is not None:
+            mat_t_p = mat_t[:,0,0]
+            mat_t_s = mat_t[:,1,1]
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "theta.csv"), theta_i)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "M_fresnel.csv"), mat_t.reshape(mat_t.shape[0], 9))
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "mat_t_p.csv"), mat_t_p)
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "mat_t_s.csv"), mat_t_s)
+
+            mat_r = optical_matrices.fresnel_matrix(
+                theta_i, n0, self.interface_ris[0], reflection=True)
+            mat_r_p = mat_r[:,0,0]
+            mat_r_s = mat_r[:,1,1]
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "T_p.csv"), 1-np.real(mat_r_p*mat_r_p))
+            np.savetxt(os.path.join(self.fresnel_debug_savedir, "T_s.csv"), 1-np.real(mat_r_s*mat_r_s))
+
+
+
+        rays.transfer_matrix = (ps_project_inv @ mat_t @ ps_project @ rays.transfer_matrix)#.reshape(shape_before)
+        # print(np.shape(rays.transfer_matrix))
         
 
     def apply_matrix(self, rays):
@@ -133,7 +208,7 @@ class SineLens(Element):
         # fresnel reflection alla Sommernes et al.
         self.compute_transmission(rays)
 
-        if not rays.isMeridional:
+        if not rays.isMeridional:  # transform k_vec to meridional
             rays.meridional_transform()
 
         # default case is clockwise rotation, 

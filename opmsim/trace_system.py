@@ -122,8 +122,10 @@ def trace_rays(elements, source, options):
     
     # checking for cases where E not perpendicular with k (something went wrong)
     if any(np.abs(rays.I_per_dipole_xyz[:,2] > 1e-9)):  # check non-zero z comp
-        dotp = np.sum(rays.I_total_norm * rays.k_vec, axis=2)
-        if any(np.sum(np.abs(dotp)) > 1e-9):
+        print(((rays.I_total_norm * rays.k_vec)**2).shape)
+        dotp = np.sum((rays.I_total_norm * rays.k_vec)**2,1)
+        print('dotp', dotp.shape)
+        if any(dotp > 1e-9):
             print("Error in I dot product too!")
             print(dotp)
             print("max dot prod error", max(dotp))

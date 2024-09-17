@@ -136,9 +136,15 @@ def uniform_points_on_sphere(NA=1, point_count=5000,\
     # get closest match to NA
     max_theta_idx = np.min(np.where(thetas > needed_max_theta))
 
+    ## when I was doing this last ring is half width thing so that edge landed on edge
+    ## of collection, theta scaling was changed to be this:
     # change: scale to thetas[max_theta_idx] + thetas[max_theta_idx+1])/2 
     # instead of thetas[max_theta_idx] so that ray actually goes at asin(NA/n) angle
-    theta_scaling = needed_max_theta/((thetas[max_theta_idx] + thetas[max_theta_idx+1])/2)
+    # theta_scaling = needed_max_theta/((thetas[max_theta_idx] + thetas[max_theta_idx+1])/2)
+
+    # it is now this (again)
+    theta_scaling = needed_max_theta/thetas[max_theta_idx]
+
     if hemisphere:
         thetas *= theta_scaling
         thetas = thetas[0:max_theta_idx+1]
@@ -158,9 +164,13 @@ def uniform_points_on_sphere(NA=1, point_count=5000,\
         theta = (thetas[i+1] + thetas[i])/2
         circumference = 2*np.pi*np.sin(theta)
         ring_area_man = circumference*dtheta
-        if i==N_rings-1:
-            ring_area_man /= 2  # last ring is cut in half--sits on edge of solid angle
+        # note: this stuff is wrong actually, should delete, just commenting for now:
+        # TODO: below is making this worse, overestimate of anisotropy, wrong oslid angle
+        # am i not weighting the last ring to have hlaf intensity?
+        # if i==N_rings-1:
+        #     ring_area_man /= 2  # last ring is cut in half--sits on edge of solid angle
         # dtheta becomes flat shape (approximate for small dtheta)
+
         area_manual = ring_area_man/n_cells_fitting[i+1]
         # accounts for curvature (correct for all dtheta)
         area_cap_method = 2*np.pi*(np.cos(thetas[i])-np.cos(thetas[i+1]))/n_cells_fitting[i+1]

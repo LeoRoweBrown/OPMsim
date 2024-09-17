@@ -165,9 +165,9 @@ class PolarRays:
         """is there a more efficient way of doing this?"""
         lost = deepcopy(self)
         if escaped is None:
-            print(self.escaped)
+            # print(self.escaped)
             not_escaped = np.invert(self.escaped)
-            print(not_escaped)
+            # print(not_escaped)
 
             escaped = self.escaped
         else:  # supply different escaped array that from self
@@ -179,7 +179,7 @@ class PolarRays:
         self.theta = self.theta[not_escaped]
         self.rho = self.rho[not_escaped]
         self.area_scaling = self.area_scaling[not_escaped]
-        print(self.areas)
+        # print(self.areas)
         self.areas = self.areas[not_escaped]
 
         lost.E_vec = lost.E_vec[:, escaped, :, :]

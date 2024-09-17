@@ -87,17 +87,20 @@ def fresnel_mirror_flat(rp, rs):
     ])
     return mirror
 
-def fresnel_matrix(theta_i, n1, n2, reflection=True):
+def fresnel_matrix(theta_i, n1, n2, reflection=True, use_transmission_power=True, keep_TIR=False):
     sin_theta_t = (n1/n2)*np.sin(theta_i)
-    print("sin_theta_t", sin_theta_t)
-    print("n2/n1", n2/n1)
-    if n1>n2 and sin_theta_t >= 1:
-        print("Total internal reflection!")
-        theta_t = np.pi/2
-    else:
-        theta_t = np.arcsin(sin_theta_t)
+    #print("sin_theta_t", sin_theta_t)
+    #print("n2/n1", n2/n1)
+    total_internal_reflection_mask = np.logical_and(n1>n2, sin_theta_t >=1).reshape(len(sin_theta_t))
+    if keep_TIR:
+        total_internal_reflection_mask=np.zeros(len(theta_i), dtype=bool)
+    theta_t = np.zeros_like(sin_theta_t)
+    theta_t[total_internal_reflection_mask] = np.pi/2
+    print(total_internal_reflection_mask.shape)
+    print(np.shape(np.invert(total_internal_reflection_mask)))
+    theta_t[np.invert(total_internal_reflection_mask)] = np.arcsin(sin_theta_t[np.invert(total_internal_reflection_mask)])
 
-    print("theta_i", theta_i, theta_i*180/np.pi, "theta_t", theta_t, theta_t*180/np.pi)
+    # print("theta_i", theta_i, theta_i*180/np.pi, "theta_t", theta_t, theta_t*180/np.pi)
     r_s = (n1*np.cos(theta_i) - n2*np.cos(theta_t))/\
         (n1*np.cos(theta_i) + n2*np.cos(theta_t))
     r_p = (n2*np.cos(theta_i) - n1*np.cos(theta_t))/\
@@ -106,16 +109,39 @@ def fresnel_matrix(theta_i, n1, n2, reflection=True):
     t_s = 2*n1*np.cos(theta_i)/(n1*np.cos(theta_i)+n2*np.cos(theta_t))
     t_p = 2*n1*np.cos(theta_i)/(n2*np.cos(theta_i)+n1*np.cos(theta_t))
 
-    mat_t = np.array([
-        [t_p, 0, 0],
-        [0, t_s, 0],
-        [0, 0, 1]
-    ])
-    mat_r = np.array([
-        [r_p, 0, 0],
-        [0, r_s, 0],
-        [0, 0, 1]
-    ])
+    # At the moment, transmission is complicated because there is a RI and angle change
+    # simplify by caluclating the power coefficients (and square rooting)
+    T_scale = (n2/n1)*(np.cos(theta_t)/np.cos(theta_i))
+    t_p_abs = np.sqrt(T_scale*t_p*np.conj(t_p))
+    t_s_abs = np.sqrt(T_scale*t_s*np.conj(t_s))
+
+    if use_transmission_power:
+        t_p = t_p_abs
+        t_s = t_s_abs
+
+    t_s = t_s.reshape(len(t_s))  # like matlab's squeeze
+    t_p = t_p.reshape(len(t_p))
+    r_s = r_s.reshape(len(r_s))
+    r_p = r_p.reshape(len(r_p))    
+
+    mat_t = np.zeros([len(theta_t), 3, 3], dtype=np.complex64)
+    mat_r = np.zeros([len(theta_t), 3, 3], dtype=np.complex64)
+
+    print(t_p.shape)
+    print(t_s.shape)
+
+    for n in range(len(theta_t)):
+        mat_t[n, :, :] = np.array([
+            [t_p[n], 0, 0],
+            [0, t_s[n], 0],
+            [0, 0, 1]
+        ])
+        mat_r[n, :, :] = np.array([
+            [r_p[n], 0, 0],
+            [0, r_s[n], 0],
+            [0, 0, 1]
+        ])
+
     if reflection:
         return mat_r
     else:
