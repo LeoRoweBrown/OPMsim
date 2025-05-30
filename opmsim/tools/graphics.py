@@ -29,8 +29,8 @@ class PupilPlotObject():
     def plot(self, title,
             show_prints=False, plot_arrow=None,
             fill_zeroes=False, scale_range=None,
-            rotate_90=False, caption_text=None, max_r_in=None,
-            use_circle_path=False, add_autoscale_plots=False,
+            rotate_90=False, caption_text=None, pupil_boundary_radius=None,
+            draw_circle_edge=False, add_autoscale_plots=False,
             font_sizes=[14,12,11], draw_NA_circle=None):
         """tricontourf for plotting, and a polar transformation"""
 
@@ -50,16 +50,16 @@ class PupilPlotObject():
 
         # a lot of this is attempts at automating tick range calculations, i gave up
         n_ticks=6
-        max_for_scale = np.max(np.concatenate((data_x, data_y, data_total)))
-        max_for_scale = np.round(max_for_scale*20)/20
+        max_range = np.max(np.concatenate((data_x, data_y, data_total)))
+        max_range = np.round(max_range*20)/20
         if scale_range is None:
-            min_for_scale = np.min(np.concatenate((data_x, data_y, data_total)))
-            min_for_scale = np.round(min_for_scale*20)/20
+            min_range = np.min(np.concatenate((data_x, data_y, data_total)))
+            min_range = np.round(min_range*20)/20
         else:
             try:
-                min_for_scale = scale_range[0]
+                min_range = scale_range[0]
                 if scale_range[1] is not None:
-                    max_for_scale = scale_range[1]
+                    max_range = scale_range[1]
             except TypeError as e:
                 raise Exception(
                     "scale_range must be in the form [float, float], " + 
@@ -68,11 +68,11 @@ class PupilPlotObject():
             if len(scale_range) == 3:
                 n_ticks=scale_range[2]
 
-        if min_for_scale > max_for_scale:
-            min_for_scale = max_for_scale
+        if min_range > max_range:
+            min_range = max_range
 
-        print("min for scale", min_for_scale)
-        print("max for scale", max_for_scale)
+        print("min for scale", min_range)
+        print("max for scale", max_range)
         
         print("Filling background of polar plot with zeroes!")
         # get initial triangulation:
@@ -80,10 +80,10 @@ class PupilPlotObject():
         delaunay = Delaunay(np.array((x,y)).T)  # get triangulation for simplex
 
         max_r = np.max([np.max(x), np.max(y), abs(np.min(x)), abs(np.min(y))])
-        print("max_r_in", max_r_in, "max_r", max_r)
+        print("pupil_boundary_radius", pupil_boundary_radius, "max_r", max_r)
 
-        if max_r_in is not None:
-            max_r = max([max_r_in, max_r])
+        if pupil_boundary_radius is not None:
+            max_r = max([pupil_boundary_radius, max_r])
 
         # get a better estimate of maximum radius - see a diagram for this (ask me?)
         sorted_phi = np.sort(np.arctan2(y,x))
@@ -150,15 +150,15 @@ class PupilPlotObject():
             n_plots = 6
         fig = plt.figure(figsize=figsize) 
 
-        cbar_ticks = np.linspace(min_for_scale, max_for_scale, n_ticks)
+        cbar_ticks = np.linspace(min_range, max_range, n_ticks)
         # cbar_ticks = None
         
-        range_diff = max_for_scale-min_for_scale
+        range_diff = max_range-min_range
         power = ceil(np.log10(range_diff))
         n_ticks = np.round(range_diff*10**(-power))
         n_ticks_more = n_ticks*2**(1-np.round(n_ticks/10))
         tick_spacing = 10**power/2**(1-np.round(n_ticks/10))
-        # cbar_ticks = np.arange(min_for_scale, max_for_scale, tick_spacing)
+        # cbar_ticks = np.arange(min_range, max_range, tick_spacing)
 
         cmap=matplotlib.cm.get_cmap('autumn_r')
 
@@ -170,24 +170,24 @@ class PupilPlotObject():
         # overrides the previous attempt at auto scaling
         if scale_range is None:
             print("AUTOSCALING 5 TICKS")
-            min_for_scale = None
-            max_for_scale = None
+            min_range = None
+            max_range = None
             levels = 257
             cbar_ticks = [] # ticker.MaxNLocator(5)
             cbar_ticks = ticker.MaxNLocator(nbins=5, prune='both')
         else:
-            levels = np.linspace(min_for_scale, max_for_scale, 257)
+            levels = np.linspace(min_range, max_range, 257)
 
         if rotate_90:
             pc1 = ax.tricontourf(list(y), list(x), data_x, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         else:
             pc1 = ax.tricontourf(list(x), list(y), data_x, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
         #display_r = ax.transData.transform(max_r)
         #Circle((display_r/2,display_r/2),display_r/2,zorder=-1)
-        if use_circle_path:
+        if draw_circle_edge:
             circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
             ax.add_patch(circ)
         else:
@@ -214,11 +214,11 @@ class PupilPlotObject():
         ax2 = fig.add_subplot(1,n_plots,2)
         if rotate_90:
             pc2 = ax2.tricontourf(list(y), list(x), data_y, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         else:
             pc2 = ax2.tricontourf(list(x), list(y), data_y, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-        if use_circle_path:
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
+        if draw_circle_edge:
             circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
             ax2.add_patch(circ)   
         else: 
@@ -245,11 +245,11 @@ class PupilPlotObject():
         ax3 = fig.add_subplot(1,n_plots,3)
         if rotate_90:
             pc3 = ax3.tricontourf(list(y), list(x), data_total, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         else:
             pc3 = ax3.tricontourf(list(x), list(y), data_total, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-        if use_circle_path:
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
+        if draw_circle_edge:
             circ = Circle((0, 0), max_r*1.003,zorder=5,facecolor=None,edgecolor='k',linewidth=2)
             ax3.add_patch(circ) 
         else:
@@ -296,8 +296,8 @@ class PupilPlotObject():
         print("Saving in %s" % save_dir)
         self.figure.savefig(save_dir, bbox_inches='tight')
 
-    def plot_autoscale(self, fig, rotate_90=False, use_circle_path=False,
-                    max_r_in=None,pad=0.04, cmap=None, font_sizes=[14,12,11],
+    def plot_autoscale(self, fig, rotate_90=False, draw_circle_edge=False,
+                    pupil_boundary_radius=None,pad=0.04, cmap=None, font_sizes=[14,12,11],
                     draw_NA_circle=None):
         """TODO reuse functions more, tidy up.. it's a mess"""
         ax = fig.add_subplot(1,6,4)
@@ -311,29 +311,29 @@ class PupilPlotObject():
             self.data_y, self.data_total
         
         max_r = np.max([np.max(x), np.max(y), abs(np.min(x)), abs(np.min(y))])
-        print("max_r_in", max_r_in, "max_r", max_r)
+        print("pupil_boundary_radius", pupil_boundary_radius, "max_r", max_r)
 
-        if max_r_in is not None:
-            max_r = max([max_r_in, max_r])
+        if pupil_boundary_radius is not None:
+            max_r = max([pupil_boundary_radius, max_r])
 
         # draw line instead
         r_line = np.array([max_r]*100)
         phi_line = np.linspace(0, 2*np.pi,100)
 
-        min_for_scale = None
-        max_for_scale = None
+        min_range = None
+        max_range = None
         levels = 257
         cbar_ticks = ticker.MaxNLocator(nbins=4, prune='both')
 
 
         if rotate_90:
             pc1 = ax.tricontourf(list(y), list(x), data_x, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         else:
             pc1 = ax.tricontourf(list(x), list(y), data_x, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
 
-        if use_circle_path:
+        if draw_circle_edge:
             circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
             ax.add_patch(circ)
         else:
@@ -361,11 +361,11 @@ class PupilPlotObject():
         ax2 = fig.add_subplot(1,6,5)
         if rotate_90:
             pc2 = ax2.tricontourf(list(y), list(x), data_y, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         else:
             pc2 = ax2.tricontourf(list(x), list(y), data_y, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-        if use_circle_path:
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
+        if draw_circle_edge:
             circ = Circle((0, 0), max_r*1.003,zorder=4,facecolor=None,edgecolor='k',linewidth=2)
             ax2.add_patch(circ)   
         else: 
@@ -391,11 +391,11 @@ class PupilPlotObject():
         ax3 = fig.add_subplot(1,6,6)
         if rotate_90:
             pc3 = ax3.tricontourf(list(y), list(x), data_total, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
         else:
             pc3 = ax3.tricontourf(list(x), list(y), data_total, cmap=cmap,\
-                levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
-        if use_circle_path:
+                levels=levels, vmin=min_range,vmax=max_range, extend='both')
+        if draw_circle_edge:
             circ = Circle((0, 0), max_r*1.003,zorder=5,facecolor=None,edgecolor='k',linewidth=2)
             ax3.add_patch(circ) 
         else:
@@ -430,21 +430,21 @@ def heatmap_plot(x0, y0, data_x, data_y, title=""):
 
     fig = plt.figure(figsize=[10,3]) 
 
-    max_for_scale = np.max([np.max(data_x), np.max(data_y)])
-    min_for_scale = np.min([np.min(data_x), np.min(data_y)])
+    max_range = np.max([np.max(data_x), np.max(data_y)])
+    min_range = np.min([np.min(data_x), np.min(data_y)])
 
     import matplotlib
-    cbar_ticks = np.linspace(min_for_scale, max_for_scale, 11)
+    cbar_ticks = np.linspace(min_range, max_range, 11)
     #cmap=matplotlib.cm.get_cmap('autumn_r')
     cmap=matplotlib.colormaps['autumn_r']
 
     ax = fig.add_subplot(131)
-    # print("I-field data",  trace_E_vec[:,0]**2)
-    levels = np.linspace(min_for_scale, max_for_scale, 257)
+    # print("I-field data",  trace_e_field[:,0]**2)
+    levels = np.linspace(min_range, max_range, 257)
 
 
     pc1 = ax.tricontourf(x0, y0, data_x, cmap=cmap,\
-        levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        levels=levels, vmin=min_range,vmax=max_range, extend='both')
 
     # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
     ax.set_aspect('equal')
@@ -454,10 +454,10 @@ def heatmap_plot(x0, y0, data_x, data_y, title=""):
     fig.colorbar(pc1, ax=ax, fraction=0.04, pad=0.15, ticks=cbar_ticks,location="bottom")
     
     ax2 = fig.add_subplot(132)
-    levels = np.linspace(min_for_scale, max_for_scale, 257)
+    levels = np.linspace(min_range, max_range, 257)
 
     pc2 = ax2.tricontourf(x0, y0, data_y, cmap=cmap,\
-        levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        levels=levels, vmin=min_range,vmax=max_range, extend='both')
 
     # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
     ax2.set_aspect('equal')
@@ -466,10 +466,10 @@ def heatmap_plot(x0, y0, data_x, data_y, title=""):
     
     fig.colorbar(pc2, ax=ax2, fraction=0.04, pad=0.15, ticks=cbar_ticks,location="bottom")
     ax3 = fig.add_subplot(133)
-    levels = np.linspace(min_for_scale, max_for_scale, 257)
+    levels = np.linspace(min_range, max_range, 257)
 
     pc3 = ax3.tricontourf(x0, y0, data_y+data_x, cmap=cmap,\
-        levels=levels, vmin=min_for_scale,vmax=max_for_scale, extend='both')
+        levels=levels, vmin=min_range,vmax=max_range, extend='both')
 
     # plt.plot(r_line*np.cos(phi_line), r_line*np.sin(phi_line), color='k', zorder=2)
     ax3.set_aspect('equal')

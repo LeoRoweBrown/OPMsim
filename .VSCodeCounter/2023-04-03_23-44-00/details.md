@@ -32,8 +32,8 @@ Total : 35 files,  58813 codes, 1242 comments, 816 blanks, all 60871 lines
 | [opmsim/detector.py](/opmsim/detector.py) | Python | 98 | 29 | 19 | 146 |
 | [opmsim/dipole_source.py](/opmsim/dipole_source.py) | Python | 204 | 143 | 56 | 403 |
 | [opmsim/distribution_functions.py](/opmsim/distribution_functions.py) | Python | 129 | 24 | 31 | 184 |
-| [opmsim/optical_elements.py](/opmsim/optical_elements.py) | Python | 511 | 276 | 197 | 984 |
-| [opmsim/optical_matrices.py](/opmsim/optical_matrices.py) | Python | 197 | 16 | 46 | 259 |
+| [opmsim/optical_elements.py](/opmsim/optical_elements/optical_elements.py) | Python | 511 | 276 | 197 | 984 |
+| [opmsim/optical_matrices.py](/opmsim/matrices/optical_matrices.py) | Python | 197 | 16 | 46 | 259 |
 | [opmsim/optical_system_base.py](/opmsim/optical_system_base.py) | Python | 86 | 13 | 18 | 117 |
 | [opmsim/optical_systems.py](/opmsim/optical_systems.py) | Python | 150 | 25 | 48 | 223 |
 | [opmsim/ray.py](/opmsim/ray.py) | Python | 46 | 16 | 6 | 68 |

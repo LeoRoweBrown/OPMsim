@@ -1,7 +1,7 @@
 from time import time
 import numpy as np
 from matplotlib import pyplot as plt
-from . import optical_matrices
+from . import matrices
 import math
 
 def mc_sampler_photoselection(N, excitation_polarisation, maxiter=10000):

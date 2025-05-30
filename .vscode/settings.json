@@ -4,5 +4,14 @@
     "python.analysis.extraPaths": [
         "./graphics"
     ],
-    "editor.tabCompletion": "on"
+    "editor.tabCompletion": "on",
+    "flake8.enabled": true,
+    "flake8.args": [
+        "--ignore=E402,F841,F401,E302,E305,W503,E266", "--max-line-length=120"
+    ],
+    "pylint.enabled": false,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "black-formatter.args": ["--line-length", "120"]
 }

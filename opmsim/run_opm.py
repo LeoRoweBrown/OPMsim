@@ -36,7 +36,7 @@ def main():
     opm_angle =35*np.pi/180
 
     source_x = dipole_source.DipoleSource(name='random dipoles')
-    source_x.generate_dipoles(1000)#
+    source_x.generate_dipole_ensemble(1000)#
     source_x.classical_photoselection((0,0))
 
     detector = optical_systems.objective_system(lenses, source_x, title=titles[0], ray_count=7000)

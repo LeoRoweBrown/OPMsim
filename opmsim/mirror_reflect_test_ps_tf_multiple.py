@@ -1,4 +1,4 @@
-import optical_matrices
+from opmsim.matrices import optical_matrices
 import numpy as np
 import shelve
 
@@ -42,14 +42,14 @@ E1 = np.array([-1,0,1])
 E2 = np.array([0,1,1])
 E3 = np.array([-1,0,1])
 
-E_vec = np.vstack([E1,E2])#,E1,E2])
-E_vec = np.vstack([E1,E2,E3])
+e_field = np.vstack([E1,E2])#,E1,E2])
+e_field = np.vstack([E1,E2,E3])
 
-E_vec = E_vec.reshape(E_vec.shape[0], 3, 1)
+e_field = e_field.reshape(e_field.shape[0], 3, 1)
 k_vec_norm = k_vec_norm.reshape(k_vec_norm.shape[0], 3, 1)
 
 # check
-print("dot product E and k", np.sum(k_vec_norm * E_vec, axis=1))
+print("dot product E and k", np.sum(k_vec_norm * e_field, axis=1))
 
 N = np.array([0,0,-1]).reshape(1,3,1)
 
@@ -86,15 +86,15 @@ m1_x = m1_unit[:,0]
 m1_y = m1_unit[:,1]
 m1_z = m1_unit[:,2]
 
-M1 = optical_matrices.arbitrary_rotation(theta_m1, m1_x,m1_y,m1_z)
+M1 = optical_matrices.arbitrary_rotation(theta_m1, m1_x, m1_y, m1_z)
 M1 = M1.reshape(M1.shape[0],3,3)
 M1_inv = np.linalg.inv(M1)
 
-E_vec_prime = M1 @ E_vec
+e_field_prime = M1 @ e_field
 
-Eprime_rand = E_vec_prime
+Eprime_rand = e_field_prime
 # randomize the field:
-for n in range(E_vec.shape[0]):
+for n in range(e_field.shape[0]):
     Eprime_rand[n, :, :] = np.array([rand_k(), rand_k(), 0]).reshape(3,1)
 
 Eprime =  np.array([
@@ -110,12 +110,12 @@ print(E_rand.shape)
 
 
 if rand_field:
-    E_vec = E_rand # np.vstack([E1,E2,E_rand])
+    e_field = E_rand # np.vstack([E1,E2,E_rand])
 else:
-    E_vec = M1_inv @ Eprime
+    e_field = M1_inv @ Eprime
 
 # check
-print("dot product E and k with rand", np.sum(k_vec_norm * E_vec, axis=1))
+print("dot product E and k with rand", np.sum(k_vec_norm * e_field, axis=1))
 
 r_prime = M1 @ r
 r_inv_prime = M1_inv @ r
@@ -167,7 +167,7 @@ m2_y = m2_unit[:,1]
 m2_z = m2_unit[:,2]
 
 # rotation matrix 2
-M2 = optical_matrices.arbitrary_rotation(theta_m2, m2_x,m2_y,m2_z)
+M2 = optical_matrices.arbitrary_rotation(theta_m2, m2_x, m2_y, m2_z)
 M2 = M2.reshape(M2.shape[0],3,3)
 
 M2M1 = M2 @ M1
@@ -175,8 +175,8 @@ M2M1 = M2 @ M1
 M2_inv = np.linalg.inv(M2)
 M2M1_inv = np.linalg.inv(M2M1)
 
-E_ps = M2M1 @ E_vec
-E_zk = M1 @ E_vec
+E_ps = M2M1 @ e_field
+E_zk = M1 @ e_field
 
 k_ps = M2M1 @ k_vec_norm
 k_zk = M1 @ k_vec_norm
@@ -206,8 +206,6 @@ print("M2_inv", M2_inv)
 print("kps_kz_xyz", kps_kz_xyz)
 print("kps_xyz", kps_xyz)
 print("k_vec_norm", k_vec_norm)
-
-from matplotlib import pyplot as plt
 
 Ep_r_dot = np.sum(Ep_ps_xyz.squeeze() * r.squeeze(), axis=1)/np.linalg.norm(Ep_ps_xyz, axis=1)
 print("Ep_r_dot (should be 1)", Ep_r_dot)

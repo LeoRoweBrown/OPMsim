@@ -33,15 +33,15 @@ class Dipole():
             np.cos(alpha_d)*np.sin(phi_d), \
             np.sin(alpha_d)]
 
-    def get_initial_efield(self, rays):
-        # use _get_efield to calculate the E field based on a propagation vector
+    def get_initial_e_field(self, rays):
+        # use _get_e_field to calculate the E field based on a propagation vector
         # and the dipole distribution
         n_vec = rays.k_vec
         r = rays.radius
         n_x_p = np.cross(n_vec,self.p_vec)
         k = 2*np.pi/self.lda_exc 
  
-        self.E_vec = np.cross(n_x_p, n_vec)
+        self.e_field = np.cross(n_x_p, n_vec)
         self.E_pre  = (np.e**(1j*k*r)/r)*k**2  # replace with distribution of k (lambda_exc)
 
-        # self.E_vec = self.E_vec.astype(complex)
+        # self.e_field = self.e_field.astype(complex)

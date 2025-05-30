@@ -32,7 +32,7 @@ class PupilPlotObject():
 
         print("----------------------------------")
 
-        max_for_scale = (np.max(self.unstructured_data_total))
+        max_range = (np.max(self.unstructured_data_total))
 
 
         
@@ -120,7 +120,7 @@ class PupilPlotObject():
         ax = fig.add_subplot(131)
         print("I-field data", data_x)
         pc1 = ax.tricontourf(list(x), list(y), data_x,\
-            levels=256, vmin=0,vmax=max_for_scale)
+            levels=256, vmin=0,vmax=max_range)
         ax.set_aspect('equal')
         ax.axis('off')
         ax.set_title("X component intensity")
@@ -145,7 +145,7 @@ class PupilPlotObject():
 
         ax2 = fig.add_subplot(132)
         pc2 = ax2.tricontourf(list(x), list(y), data_y,\
-            levels=256, vmin=0,vmax=max_for_scale)
+            levels=256, vmin=0,vmax=max_range)
         ax2.set_aspect('equal')
         ax2.axis('off')
         ax2.set_title("Y component intensity")
@@ -161,7 +161,7 @@ class PupilPlotObject():
 
         ax3 = fig.add_subplot(133)
         pc3 = ax3.tricontourf(list(x), list(y), data_total,\
-         levels=256, vmin=0,vmax=max_for_scale)
+         levels=256, vmin=0,vmax=max_range)
         ax3.set_aspect('equal')
         ax3.axis('off')
         ax3.set_title("Total intensity")
@@ -202,9 +202,9 @@ class PupilPlotObject():
         # print(data_y)
         print("----------------------------------")
 
-        max_for_scale = (np.max(data_sum))
+        max_range = (np.max(data_sum))
         # print("type: ", type(data_sum))
-        # print("type: ", type(max_for_scale))
+        # print("type: ", type(max_range))
         # print("angles:", self.polar_angles)
         # print(data_sum)
         fig = plt.figure(figsize=[10,4])
@@ -213,7 +213,7 @@ class PupilPlotObject():
         ax1 = fig.add_subplot(131, projection=projection)
         # pc1 = ax1.pcolormesh(angles,pupil_r_range,data_x.T,\
         pc1 = ax1.pcolormesh(self.polar_angles, self.polar_radii, self.data_x,\
-             shading='auto', vmin=0,vmax=max_for_scale)
+             shading='auto', vmin=0,vmax=max_range)
         # pc1 = ax1.pcolormesh(self.polar_radii, self.polar_angles, self.data_x,\
         #     shading='auto')
 
@@ -237,7 +237,7 @@ class PupilPlotObject():
         ax2 = fig.add_subplot(132, projection=projection)
 
         pc2 = ax2.pcolormesh(self.polar_angles, self.polar_radii, self.data_y,\
-            shading='auto', vmin=0,vmax=max_for_scale)
+            shading='auto', vmin=0,vmax=max_range)
 
         fig.colorbar(pc2, ax=ax2, fraction=0.045, pad=0.18)
 
@@ -255,7 +255,7 @@ class PupilPlotObject():
         ax3 = fig.add_subplot(133, projection=projection)
 
         pc3 = ax3.pcolormesh(self.polar_angles, self.polar_radii, data_sum,\
-            shading='auto', vmin=0,vmax=max_for_scale)
+            shading='auto', vmin=0,vmax=max_range)
         fig.colorbar(pc3, ax=ax3, fraction=0.045, pad=0.18)
 
         if plot_arrow is not None:

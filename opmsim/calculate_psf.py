@@ -18,13 +18,13 @@ def calculate_psf(rays, N=100, size=2e-6):
     theta = np.arccos(rays.k_vec[:,2]).flatten()
     phi = np.arctan2(rays.k_vec[:,1], rays.k_vec[:,0]).flatten()
     kdotx = rays.k_vec * x_vec
-    E_vec_psf = np.zeros((N,N,N))
+    e_field_psf = np.zeros((N,N,N))
     for i in range(N):
         for j in range(N):     
             for k in range(N):
                 kdotx = rays.k_vec * np.array([x_vec_i[i,k,j], x_vec_j[i,k,j], x_vec_k[i,k,j]])
 
-                integrand = -(1j*rays.k_vec/2*np.pi)*rays.E_vec * np.exp(1j*kdotx) * np.sin(theta)
-                E_vec_psf[i, j, k] = simpson(simpson(integrand, x=theta), x=phi)
+                integrand = -(1j*rays.k_vec/2*np.pi)*rays.e_field * np.exp(1j*kdotx) * np.sin(theta)
+                e_field_psf[i, j, k] = simpson(simpson(integrand, x=theta), x=phi)
 
-    return E_vec_psf, size
+    return e_field_psf, size

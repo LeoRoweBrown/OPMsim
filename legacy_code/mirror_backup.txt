@@ -1,4 +1,4 @@
-def apply_matrix(self, rays):
+def trace_rays(self, rays):
         print("----------------------Electric field before reflection------------------")
 
         rays.quiver_plot(downsampling=1, n_rays = None)
@@ -10,12 +10,12 @@ def apply_matrix(self, rays):
         if self.update_history: rays.update_history()
 
         # starting field
-        initial_E_vec_4d = (rays.transfer_matrix @ rays.E_vec)#.squeeze()
-        # print(initial_E_vec.shape)
-        initial_E_vec = initial_E_vec_4d[0,:,:,0]
-        # print(initial_E_vec.shape)
+        initial_e_field_4d = (rays.transfer_matrix @ rays.e_field)#.squeeze()
+        # print(initial_e_field.shape)
+        initial_e_field = initial_e_field_4d[0,:,:,0]
+        # print(initial_e_field.shape)
 
-        # initial_E_vec = np.sum(initial_E_vec, axis=0)
+        # initial_e_field = np.sum(initial_e_field, axis=0)
         
         rho_0 = rays.rho_before_trace
         z_dist = abs(rho_0/np.tan(rays.theta))
@@ -32,8 +32,8 @@ def apply_matrix(self, rays):
 
         ################################################################
         # plot triangulated heatmap (initial field) without using phi and stuff for debugging
-        data_x =  np.real(initial_E_vec[:,0]*np.conj(initial_E_vec[:,0]))
-        data_y =  np.real(initial_E_vec[:,1]*np.conj(initial_E_vec[:,1]))
+        data_x =  np.real(initial_e_field[:,0]*np.conj(initial_e_field[:,0]))
+        data_y =  np.real(initial_e_field[:,1]*np.conj(initial_e_field[:,1]))
         
         self.heatmap_plot(x0, y0, data_x, data_y, title="Initial field")
 
@@ -75,8 +75,8 @@ def apply_matrix(self, rays):
         print(ps_project.shape)
         k_vec_ps = ps_project @ rays.k_vec
         print("k_vec_ps, should be just 0,0,1", k_vec_ps)
-        E_ps_proj = ps_project @ initial_E_vec_4d
-        print("E_vec_ps, should be Ep,Es,0", E_ps_proj)
+        E_ps_proj = ps_project @ initial_e_field_4d
+        print("e_field_ps, should be Ep,Es,0", E_ps_proj)
         M_fresnel_test = np.array([
             [0.95,0,0],
             [0,0.8,0],
@@ -197,14 +197,14 @@ def apply_matrix(self, rays):
         print("----------------------Electric field after reflection------------------")
         rays.quiver_plot(downsampling=1, n_rays = None)
 
-        E_out2 = rays.transfer_matrix @ rays.E_vec
-        E_ps_in = M2M1 @ initial_E_vec_4d
-        E_ps_out =  M_fresnel @ M2M1 @ initial_E_vec_4d
+        E_out2 = rays.transfer_matrix @ rays.e_field
+        E_ps_in = M2M1 @ initial_e_field_4d
+        E_ps_out =  M_fresnel @ M2M1 @ initial_e_field_4d
 
-        E_out_perf = reflection_mat @ initial_E_vec_4d
+        E_out_perf = reflection_mat @ initial_e_field_4d
 
-        Ein_p = initial_E_vec_4d[0,:,:,0]*p  # perp component
-        Ein_r = initial_E_vec_4d[0,:,:,0]*r  # parallel component
+        Ein_p = initial_e_field_4d[0,:,:,0]*p  # perp component
+        Ein_r = initial_e_field_4d[0,:,:,0]*r  # parallel component
 
         print("r p are crossed", np.all(r*p , 1e-16))
         Eout_p = E_out_perf[0,:,:,0]*p  # parallel component
@@ -214,7 +214,7 @@ def apply_matrix(self, rays):
 
         E_ps_in = E_ps_in[0,:,:,0]
         E_ps_out = E_ps_out[0,:,:,0]
-        E_in = initial_E_vec
+        E_in = initial_e_field
         E_out = E_out2[0,:,:,0]
 
         if self.fresnel_debug_savedir and not self.perfect_mirror:
@@ -332,9 +332,9 @@ def apply_matrix(self, rays):
 
         Es_not_perp = (abs(Es_r_dot) > np.finfo(Es_r_dot.dtype).eps)
         print(Es_not_perp.shape)
-        print(rays.E_vec.shape)
+        print(rays.e_field.shape)
         print(rays.k_vec.shape)
-        print("Not perp E", rays.E_vec[0,Es_not_perp,:,0])
+        print("Not perp E", rays.e_field[0,Es_not_perp,:,0])
 
         print("Not perp k", rays.k_vec[Es_not_perp,:])
 

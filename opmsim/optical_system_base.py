@@ -51,7 +51,7 @@ class OpticalSystem():
 
         if self.source is None:
             self.source = dipole_source.DipoleSource(name='Uniformally distributed dipoles')
-            self.source.generate_dipoles(1000)  # uniform generation
+            self.source.generate_dipole_ensemble(1000)  # uniform generation
             # source.classical_photoselection((0,0))  # simulate excitation
 
         # rays defined by collection NA of O1
@@ -97,7 +97,7 @@ class OpticalSystem():
             'title': default_plot_title,
             'caption': True,
             'add_sim_details': True,
-            'max_r_in': None
+            'pupil_boundary_radius': None
         }
         for key in plot_options:
             self.plot_options[key] = plot_options[key]

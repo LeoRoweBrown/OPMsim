@@ -52,10 +52,10 @@ dipole_source.py:
 dipole.py:
 -Dipole (class):
 	- self.__init__(dipole_orientation)
-	- self.get_efield(theta, phi, r):
+	- self.get_e_field(theta, phi, r):
 		evaluate electric field a radius from dipole at (theta, phi)
 	- self.get_rays(NA):
 		calculate uniform distributed points on entrance pupil and call get_ray
-		for each point, which calls get_efield to find the ray's initial E-field 
+		for each point, which calls get_e_field to find the ray's initial E-field 
 		
 		

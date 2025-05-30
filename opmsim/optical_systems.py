@@ -58,7 +58,7 @@ def objective_system(
         print("Lens rotation:", rot)
         elements.append(optical_elements.SineLens(
             lens['NA'], lens['f'], n=lens['n'],
-            yAxis_rotation=rot, show_plots=show_ray_plots))
+            y_axis_rotation=rot, show_plots=show_ray_plots))
 
     # add the polariser
     if polariser is not None:
@@ -174,7 +174,7 @@ def anisotropy_measuring_system(collection_NA, collection_f, excitation_polarisa
     init_start = time.time()
     if source is None:
         source = dipole_source.DipoleSource()
-        source.generate_dipoles(500, method='uniform_phi_inbetween')
+        source.generate_dipole_ensemble(500, method='uniform_phi_inbetween')
         excitation_polarisation = (0,0)
         source.classical_photoselection(excitation_polarisation)
     
