@@ -7,19 +7,19 @@ import numpy as np
 
 def meridional_transform(phi, inverse=False):
     zeros = np.zeros_like(phi)  # so we can make a tensor
+    ones = np.ones_like(phi)
     meridional_matrix = np.array([
         [np.cos(phi), np.sin(phi), zeros],
         [-np.sin(phi), np.cos(phi), zeros],
-        [zeros, zeros, zeros]
-    ])
+        [zeros, zeros, ones]
+    ]).swapaxes(-1, 0)
     if inverse:
         try:
             meridional_matrix = np.linalg.inv(meridional_matrix)
-        except Exception as e:
+        except np.linalg.LinAlgError as e:
             print("Could not invert meridional transform:", meridional_matrix)
             raise
-
-    return meridional_transform
+    return meridional_matrix
 
 def arbitrary_rotation(theta, ux, uy, uz):
     """
@@ -70,13 +70,12 @@ def lab_to_local_wavefront_basis(phi, theta, inverse=False) -> np.ndarray:
         [np.cos(phi) * np.cos(theta), np.sin(phi) * np.cos(theta), -np.sin(theta)],
         [-np.sin(phi), np.cos(phi), np.zeros_like(phi)],
         [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
-    ])
+    ]).reshape((len(phi), 3, 3))
     if inverse:
         try:
             rotate = np.linalg.inv(rotate)
-        except:
-            print(rotate)
-            raise Exception("COULD NOT INVERT ROTATE BASIS VECTOR")
+        except np.linalg.LinAlgError as e:
+            raise Exception("Failed to invert local lab rotation matrix") from e
     return rotate
 
 def ps_projection_matrix(p, s, k_vec, inverse=False):
@@ -91,21 +90,23 @@ def ps_projection_matrix(p, s, k_vec, inverse=False):
 
     for n in range((p.shape[0])):
 
-        if np.all(np.equal(p[n,:], 0)):
+        if np.all(np.equal(p[n, :], 0)):
             ps_projection[n, :, :] = np.identity(3)
         else:
-            ps_projection[n, :, :] = np.array([
-                [p[n,0], p[n,1], p[n,2]],
-                [s[n,0], s[n,1], s[n,2]],
-                [k_vec[n,0], k_vec[n,1], k_vec[n,2]]
-            ])
+            ps_projection[n, :, :] = np.array(
+                [
+                    [p[n, 0], p[n, 1], p[n, 2]],
+                    [s[n, 0], s[n, 1], s[n, 2]],
+                    [k_vec[n, 0], k_vec[n, 1], k_vec[n, 2]]
+                ]
+            )
         if inverse:
             ps_projection[n, :, :] = np.linalg.inv(ps_projection[n, :, :])
     return ps_projection
 
 def flip_axis(axis=2):
     flip = np.identity(3)
-    flip[axis,axis] = -1
+    flip[axis, axis] = -1
     return flip
 
 def rotate_rays_x(angle):

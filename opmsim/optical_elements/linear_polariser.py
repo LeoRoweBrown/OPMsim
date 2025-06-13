@@ -8,7 +8,7 @@ class LinearPolariser(Element):
         self.dz = dz
         self.update_history = update_history
 
-    def trace_rays(self, rays, update_history=False):
+    def trace_rays(self, rays, calculate_efield=False, debug_dir=None):
         if self.update_history:
             rays.update_history()
 

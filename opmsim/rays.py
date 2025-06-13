@@ -29,6 +29,7 @@ class PolarRays:
             keep_history (bool, optional): save the state of the object if True. Defaults to True.
         """
         self.n = len(phi_array)
+        self.n_initial = self.n
         self.n_final = self.n
         self.lda = lda  # wavelength
 
@@ -56,6 +57,8 @@ class PolarRays:
         if area_elements is None:
             area_elements = np.ones(self.n)  # TODO place with area calculation of cap
         self.areas = area_elements  # area elements dA assoicated with each ray that build up the spherical surface
+        self.area_scaling = np.ones(self.n)  # for scaling energy when flat and curved wavefronts
+
         self.transfer_matrix = np.tile(np.identity(3), (1, self.n, 1, 1))  # TODO move to somewhere else?
         self.negative_kz = False  # e.g., if ray is reflected back by mirror
         self.ray_density = self.n / np.sum(area_elements)  # so values dont change with ray number
@@ -88,7 +91,7 @@ class PolarRays:
         """
         self.pos += self.k_vec * path_distance
 
-    def get_intensity(self, scaling=np.array([1]), scale_by_density=True):
+    def calculate_intensity(self, scaling=np.array([1]), scale_by_density=True):
         """
         calculate field intensity on wavefront surface for the current
         rays object, scaled by photoselection (scaling), which depends ontthe dipole object
@@ -114,11 +117,8 @@ class PolarRays:
         Remove rays that are lost in the tracing, makes simulation more efficient
         is there a more efficient way of doing this?
         """
-        lost = deepcopy(self)
         if escaped is None:
-            # print(self.escaped)
             not_escaped = np.invert(self.escaped)
-            # print(not_escaped)
 
             escaped = self.escaped
         else:  # supply different escaped array that from self
@@ -133,6 +133,7 @@ class PolarRays:
         self.areas = self.areas[not_escaped]
 
     def combine_rays(self, rays2):
+        """Combine two ray objects. currently not used"""
         self.e_field = np.append(self.e_field, rays2.e_field, axis=1)
         self.k_vec = np.append(self.k_vec, rays2.k_vec, axis=0)
         self.transfer_matrix = \

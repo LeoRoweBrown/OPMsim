@@ -9,7 +9,7 @@ class Element():
         self.matrix_list = dict()
         self.dz = dz
 
-    def trace_rays(self, rays):
+    def trace_rays(self, rays, calculate_efield=False, debug_dir=None):
         """
         Base method for tracing rays (PolarRays object).
         Implementation should apply transformations/tracing to the rays.k_vec, rays.theta, rays.phi, etc.,
@@ -20,7 +20,7 @@ class Element():
         TODO: I am hoping to replace this with cartesian rays.pos, and calculate position in pupil from this
         independent of the polar coordinates rho, phi.
         CURRENTLY UNUSED. I think I will do ray propagation in PolarRays itself.
-        
+
         Args:
             rays (np.ndarray): PolarRays object associated with the DipoleSource
         """

@@ -7,8 +7,8 @@ class DiagonalMatrix(Element):
         self.value = value  #
         self.update_history = update_history
 
-    def trace_rays(self, rays, update_history=False):
-        if self.update_history: 
+    def trace_rays(self, rays, calculate_efield=False, debug_dir=None):
+        if self.update_history:
             rays.update_history()
         if rays.isMeridional:  # put back into non meridional basis
             rays.meridional_transform(inverse=True)

@@ -9,27 +9,19 @@ from . import matrices
 
 class DipoleSource:
     """
-    Source made of multiple dipoles
+    Source made of multiple dipoles  # TODO redo docstring
 
-    Note: everything is in radians, but the optical system is in degrees
-    Is this confusing?
-    Arguments:
-        phi_d <float> -- azimuthal angle, rotation about z axis [rad]
-                        clockwise when looking along positive z (into paper)
-        alpha_d <float> -- angle of dipole from x axis [rad].
-        lda_em <float> -- emission of fluorophore/dipole
-                            (to be implemented) [nm]
-        lda_exc <float> -- excitaiton of fluorophore/dipole (used)
-                    for probability in photoselection? (to be implemented) [nm]
-    Methods:
-        get_rays(self, NA)
     """
 
-    def __init__(self, phi_d_array=[], alpha_d_array=[], name="source", lda_exc=None, lda_em=None):
+    def __init__(self, dipole_orientations=(()), name="default source", lda_exc=None, lda_em=None):
         if lda_exc is None:
             lda_exc = 500e-9  # should be a distribution at some point
         if lda_em is None:
             lda_em = 500e-9  # should be a distribution at some point
+
+        phi_alpha_pairs = np.array(dipole_orientations).reshape((-1, 2))  # -1 to infer length, 2D for phi, alpha
+        phi_d_array = np.array(phi_alpha_pairs[:, 0])
+        alpha_d_array = np.array(phi_alpha_pairs[:, 1])
 
         self.alpha_d = alpha_d_array
         self.phi_d = phi_d_array
@@ -38,6 +30,7 @@ class DipoleSource:
         self.emission_scaling = np.ones(
             (len(alpha_d_array), 1, 1, 1)
         )  # scales quantity/emission_scaling/fractional quantity of dipole
+
         self.n_dipoles = len(phi_d_array)
 
         self.excitation_polarisation = None
@@ -51,12 +44,14 @@ class DipoleSource:
         )
         self.p_vec = self.p_vec.reshape((len(self.phi_d), 3))
 
-    def get_initial_e_fields(self, rays):
+    def get_initial_e_fields(self, rays: PolarRays):
         # use _get_e_field to calculate the E field based on a propagation vector
         # and the dipole distribution
         n_vec = rays.k_vec
         p_vec = self.p_vec
-        r = rays.radius
+
+        # r = rays.radius DEPRECATED the radius attrib TODO: tidy up
+        r = 1
 
         n_dipoles = p_vec.shape[0]
         n_rays = n_vec.shape[0]
@@ -72,14 +67,9 @@ class DipoleSource:
         rays.e_field = rays.e_field.reshape((n_dipoles, n_rays, 3, 1))  # e_fields are (3x1)
         rays.E_pre = (np.e ** (1j * k * r) / r) * k**2  # replace with distribution of k (lambda_exc)
         self.emission_scaling = self.emission_scaling.reshape(n_dipoles, 1, 1, 1)
-        rays.total_intensity = np.sum(rays.e_field * rays.e_field * self.emission_scaling, axis=0)
-        # energy per dipole
 
-        rays.get_intensity(self.emission_scaling)
-        rays.intensity_vector = rays.intensity_vector
-        rays.total_energy = rays.total_intensity_norm
-
-        print("initial energy shape", rays.initial_energy.shape)
+        # Get initial energy calculations
+        rays.calculate_intensity()
 
     def add_dipoles(self, dipole_angles):
         """
@@ -162,13 +152,17 @@ class DipoleSource:
         warnings.warn("Moved display_pupil_rays to visualization.dipole_source_plots", DeprecationWarning)
 
     def get_rays_uniform(
-            self, max_half_angle, f, ray_count=5000, plot_sphere=False, ray_dist="uniform", ring_method="uniform_phi_inbetween"):
+            self, max_half_angle, f,
+            ray_count=5000, plot_sphere=False, ray_dist="uniform",
+            ring_method="uniform_phi_inbetween"):
         """Get equal area elements in rings for uniform rays, also compute their area"""
 
         if ray_dist == "uniform":
-            phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(NA, ray_count, ring_method)
+            phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
+                max_half_angle, ray_count, ring_method)
         elif ray_dist == "fibonacci":
-            phi_k, theta_k, areas = distribution_functions.fibonacci_sphere_rays(NA, ray_count)
+            phi_k, theta_k, areas = distribution_functions.fibonacci_sphere_rays(
+                max_half_angle, ray_count)
         else:
             raise Exception(f"Invalid ray distribution method '{ray_dist}'")
         if plot_sphere:
@@ -209,7 +203,7 @@ class DipoleSource:
         print(self.emission_scaling.shape)
         rays.total_intensity_initial = np.sum(rays.e_field * rays.e_field * self.emission_scaling, axis=0)
         # energy per dipole
-        rays.get_intensity(self.emission_scaling)
+        rays.calculate_intensity(self.emission_scaling)
 
         self.rays = rays
 

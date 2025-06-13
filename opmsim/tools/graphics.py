@@ -27,11 +27,11 @@ class PupilPlotObject():
         raise NotImplementedError()
         
     def plot(self, title,
-            show_prints=False, plot_arrow=None,
-            fill_zeroes=False, scale_range=None,
-            rotate_90=False, caption_text=None, pupil_boundary_radius=None,
-            draw_circle_edge=False, add_autoscale_plots=False,
-            font_sizes=[14,12,11], draw_NA_circle=None):
+             show_prints=False, plot_arrow=None,
+             fill_zeroes=False, scale_range=None,
+             rotate_90=False, caption_text=None, pupil_boundary_radius=None,
+             draw_circle_edge=False, add_autoscale_plots=False,
+             font_sizes=[14,12,11], draw_NA_circle=None):
         """tricontourf for plotting, and a polar transformation"""
 
         if len(self.x) < 4:

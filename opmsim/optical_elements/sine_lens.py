@@ -21,7 +21,7 @@ class SineLens(Element):
         self.type = "SineLens"
 
         # for immersion lenses, f used in the EP = 2*NA*f equation is the back focal length fb = fb*n
-        self.focal_length = focal_length
+        # self.focal_length = focal_length
         if front_focal_length is None:
             self.front_focal_length = focal_length * n
         if back_focal_length is None:
@@ -50,7 +50,7 @@ class SineLens(Element):
         norm[norm == 0] = 1
         return v / norm
 
-    def trace_rays(self, rays):
+    def trace_rays(self, rays, calculate_efield=False, debug_dir=None):
         # If lens is tilted (like O2 and O3), rotate rays relative to objective first
         if self.y_axis_rotation > 0:
             self.rotate_rays_y(rays)
@@ -71,14 +71,14 @@ class SineLens(Element):
         # First, transform into meridional
         meridional_matrix = matrices.transformation.meridional_transform(rays.phi)
 
-        escape_mask_rho = abs(rays.rho) >= self.focal_length
+        escape_mask_rho = abs(rays.rho) >= self.front_focal_length
         rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
         escape_mask_na = abs(rays.rho) > self.D / 2
         rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
 
-        lens_theta = np.arcsin(rays.rho / self.focal_length)  # positive is anticlockwise rotation
+        lens_theta = np.arcsin(rays.rho / self.front_focal_length)  # positive is anticlockwise rotation
         if any(np.isnan(lens_theta)):
-            warnings.warn("NaN values in lens theta - check that rho is not greater than f")
+            warnings.warn("NaN values in lens theta - check that ray height is not greater than f")
 
         rays.theta = rays.theta - lens_theta  # consider using k_vec to calculate rather than doing this?
         refract_matrix = matrices.optical_elements.lens_refraction_meridional(-lens_theta)
@@ -90,8 +90,8 @@ class SineLens(Element):
         # Then transform back from meridional
         meridional_matrix_inv = matrices.transformation.meridional_transform(rays.phi, inverse=True)
 
-        self.transfer_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix \
-            @ self.transfer_matrix
+        rays.transfer_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix \
+            @ rays.transfer_matrix
 
     def collimate_rays(self, rays):
         """
@@ -105,10 +105,10 @@ class SineLens(Element):
 
         self.trace_f(rays)  # trace to first surface
 
-        escape_mask_rho = abs(rays.rho) >= self.focal_length
+        escape_mask_rho = abs(rays.rho) >= self.front_focal_length
         rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
         if any(escape_mask_rho):
-            print(np.sum(escape_mask_rho), "rays escaped from rho mask")
+            print(np.sum(escape_mask_rho), "rays escaped due to ray height")
 
         # lens_theta = np.arcsin(rays.rho/self.focal_length)  # positive is anticlockwise rotation
         lens_theta = rays.theta  # ... or just set angles to zero explicitly
@@ -139,8 +139,8 @@ class SineLens(Element):
         # Then transform back from meridional
         meridional_matrix_inv = matrices.transformation.meridional_transform(rays.phi, inverse=True)
 
-        self.transfer_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix \
-            @ self.transfer_matrix
+        rays.transfer_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix \
+            @ rays.transfer_matrix
 
     def trace_f(self, rays):
         """Trace by one focal length"""

@@ -89,7 +89,10 @@ def uniform_mc_sampler(pdf, input_range, N, maxiter=10000, plot=True):
     return np.array(accepted_points)
 
 
-def uniform_points_on_sphere(NA=1, point_count=5000, method="rings_phi_inbetween", hemisphere=True):
+def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
+                             point_count=5000,
+                             method="rings_phi_inbetween",
+                             hemisphere=True):
     """Get equal area elements in rings for uniform rays, also compute their area"""
 
     if hemisphere:
@@ -135,7 +138,7 @@ def uniform_points_on_sphere(NA=1, point_count=5000, method="rings_phi_inbetween
 
     # Scale the surface to match the NA (scale down)
     thetas = np.array(thetas)
-    needed_max_theta = np.arcsin(NA)
+    needed_max_theta = max_half_angle
     # get closest match to NA
     max_theta_idx = np.min(np.where(thetas > needed_max_theta))
 
@@ -198,7 +201,7 @@ def uniform_points_on_sphere(NA=1, point_count=5000, method="rings_phi_inbetween
         areas_alt_k = np.append(areas_alt_k, [area_manual] * n_cells_fitting[i + 1])
         areas_usingcaps = np.append(areas_usingcaps, [area_cap_method] * n_cells_fitting[i + 1])
 
-    costheta = (1 - NA**2) ** 0.5
+    costheta = (1 - np.sin(max_half_angle)**2) ** 0.5
     expected_area = 2 * np.pi * (1 - costheta)
 
     print("cap method area sum", np.sum(areas_usingcaps))
@@ -207,7 +210,7 @@ def uniform_points_on_sphere(NA=1, point_count=5000, method="rings_phi_inbetween
     return (phi_k, theta_k, areas_usingcaps)
 
 
-def fibonacci_sphere_rays(NA=1, samples=1000):
+def fibonacci_sphere_rays(max_half_angle=(np.pi / 2), samples=1000):
     samples *= 2  # account for hemisphere
     points = np.zeros((samples, 3))
     phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
@@ -229,16 +232,16 @@ def fibonacci_sphere_rays(NA=1, samples=1000):
     mask = points[:, 2] > 0
     theta_k = np.arccos(points[mask, 2])
     phi_k = np.arctan2(points[mask, 1], points[mask, 0])
-    mask_NA = np.sin(theta_k) < NA
+    mask_theta = np.sin(theta_k) < np.sin(max_half_angle)
 
     # calculate area on unit sphere associated with each ray
     # 2*np.pi*(1-costheta) is cap area
-    sintheta = NA
+    sintheta = np.sin(max_half_angle)
     costheta = (1 - sintheta**2) ** 0.5
-    areas = np.ones(len(phi_k[mask_NA])) * 2 * np.pi * (1 - costheta) / len(phi_k[mask_NA])
+    areas = np.ones(len(phi_k[mask_theta])) * 2 * np.pi * (1 - costheta) / len(phi_k[mask_theta])
 
     plt.figure()
-    plt.scatter(phi_k[mask_NA], theta_k[mask_NA])
+    plt.scatter(phi_k[mask_theta], theta_k[mask_theta])
     plt.show()
 
-    return (phi_k[mask_NA], theta_k[mask_NA], areas)
+    return (phi_k[mask_theta], theta_k[mask_theta], areas)
