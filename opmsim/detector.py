@@ -48,6 +48,30 @@ class Detector:
         self.ray_polar_radius = np.array([None] * rays.n_final)
         self.ray_phi = np.array([None] * rays.n_final)
 
+        from matplotlib import pyplot as plt
+        plt.figure()
+        plt.title("before detector")
+        plt.hist(rays.theta)
+        plt.xlabel("theta")
+        plt.show()
+
+        plt.figure()
+        plt.hist(rays.phi)
+        plt.xlabel("phi")
+        plt.show()
+        
+        plt.figure()
+        plt.scatter(rays.k_vec[:, 0], rays.k_vec[:, 1])
+        plt.xlabel("kx")
+        plt.ylabel("ky")
+        plt.show()
+
+        plt.figure()
+        plt.scatter(rays.k_vec[:, 0], rays.k_vec[:, 2])
+        plt.xlabel("kx")
+        plt.ylabel("kz")
+        plt.show()
+
         self.ray_polar_radius, self.ray_phi = self.get_final_polar_coords(rays, self.curved)
 
         # squeeze to avoid broadcasting and (N,N) arrays instead of N
@@ -56,15 +80,30 @@ class Detector:
         self.Ix_area_scaled = self.Ix_raw.squeeze() * rays.area_scaling
         self.Iy_area_scaled = self.Iy_raw.squeeze() * rays.area_scaling
 
+        plt.figure()
+        plt.scatter(self.ray_polar_radius, rays.area_scaling)
+        plt.show()
+
         self.ray_phi = np.asarray(self.ray_phi, dtype=np.float64)
 
         phi_1d = self.ray_phi.squeeze()
         self.x = self.ray_polar_radius * np.cos(phi_1d)
         self.y = self.ray_polar_radius * np.sin(phi_1d)
 
+        # TODO REMOVE, REMOVE BELOW
+        # if self.curved:
+        #     self.x, self.y = rays.k_vec[:, 0].flatten(), rays.k_vec[:, 1].flatten()
+        # else:
+        #     self.x, self.y = rays.pos[:, 0].flatten(), rays.pos[:, 1].flatten()
+
         self.rays = rays
         self.n_rays = rays.n_final
         self.integrate_pupil()
+
+        # TODO REMOVE
+        # from matplotlib import pyplot as plt
+        # plt.figure()
+        # plt.imshow()
 
         # np.set_printoptions(threshold=1000)
 

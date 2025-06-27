@@ -1,7 +1,10 @@
 import numpy as np
 import scipy.interpolate
 from matplotlib import pyplot as plt
+from typing import List, Union
+from numpy.typing import NDArray, ArrayLike
 
+# TODO add typing
 
 def single_surface_fresnel_matrix(theta_i, n_substrate_data,
                                   wavelength=500e-9, reflection=True):

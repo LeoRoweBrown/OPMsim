@@ -51,9 +51,9 @@ def rotate_basis(phi, theta, inverse=False):
     both rotates into meridional and then does theta rotation
     """
     rotate = np.array([
-        [np.cos(phi)*np.cos(theta), np.sin(phi)*np.cos(theta), -np.sin(theta)],
+        [np.cos(phi) * np.cos(theta), np.sin(phi) * np.cos(theta), -np.sin(theta)],
         [-np.sin(phi), np.cos(phi), 0],
-        [np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), np.cos(theta)]
+        [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
     ])
     if inverse:
         try:

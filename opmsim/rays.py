@@ -1,7 +1,7 @@
 """
 Class representing bundle of rays, with a 2D matrices for k-vector and E-vectors
 """
-
+import os
 from copy import deepcopy
 import warnings
 from math import ceil
@@ -32,6 +32,9 @@ class PolarRays:
         self.n_initial = self.n
         self.n_final = self.n
         self.lda = lda  # wavelength
+        self.basis = np.array([[1, 0, 0],  # current cartesian basis
+                              [0, 1, 0],
+                              [0, 0, 1]])
 
         # these are all updated/affected by transforms
         # use column stack for (N,3) shape, where N is number of rays, then expand dims for broadcasting.
@@ -47,7 +50,11 @@ class PolarRays:
         self.rho = np.zeros_like(phi_array)  # cylindrical coordinate rho, radial distance of ray from optical axis
         self.rho_before_trace = None  # used to store the rho before tracing, sometimes useful
         self.initial_path_length = initial_path_length  # for calculating initial phase, TODO: not used maybe remove
-        self.pos = np.zeros((len(phi_array), 3, 1))  # position of ray in Cartesian coords
+        self.pos = np.zeros((len(phi_array), 3, 1))  # position of ray in Cartesian coords in current basis
+
+        # current position of ray in Cartesian coords in original basis (n_rays, 3, 1), 1 for broadcasting
+        self.pos_global = np.zeros((len(phi_array), 3, 1))
+        self.path_coords = np.zeros((len(phi_array), 3, 1))  # (global basis) coords for ray path (n_rays, 3, n_coords)
         self.total_intensity_initial = np.zeros_like(self.e_field)
 
         self.optical_axis = 0  # todo: make 3 element vector
@@ -59,7 +66,8 @@ class PolarRays:
         self.areas = area_elements  # area elements dA assoicated with each ray that build up the spherical surface
         self.area_scaling = np.ones(self.n)  # for scaling energy when flat and curved wavefronts
 
-        self.transfer_matrix = np.tile(np.identity(3), (1, self.n, 1, 1))  # TODO move to somewhere else?
+        self.transfer_matrix = np.tile(
+            np.identity(3, dtype=np.complex128), (1, self.n, 1, 1))
         self.negative_kz = False  # e.g., if ray is reflected back by mirror
         self.ray_density = self.n / np.sum(area_elements)  # so values dont change with ray number
 
@@ -71,6 +79,19 @@ class PolarRays:
         self.keep_history = keep_history  # actually overriden by trace_rays which decides this..
 
         self.ray_history = []
+
+    def verify_dot_product(self):
+        if np.any(np.abs(np.sum(self.k_vec * self.e_field, axis=2)) > 1e-9):
+            raise Exception("Dot product of E and k not zero for all rays!",
+                  np.sum(self.k_vec * self.e_field, axis=2))
+
+    def save_debug_data(self, path, save_efield=False):
+        os.makedirs(path, exist_ok=True)
+        np.savetxt(os.path.join(path, "k_vec.csv"), self.k_vec)
+        np.savetxt(os.path.join(path, "pos.csv"), self.pos)
+        np.savetxt(os.path.join(path, "rho.csv"), self.rho)
+        if save_efield:
+            np.savetxt(os.path.join(path, "e_field.csv"), self.e_field)
 
     def update_history(self, label=None):
         """
@@ -84,12 +105,56 @@ class PolarRays:
             # no reason to really have this option
             print("History has been disabled, rays not saved!")
 
-    def propagate_rays(self, path_distance):
+    def propagate(self, path_distance):
         """
         Update ray position based on current k vector and path distance to propagate
         TODO: think about case where path_distance is not the same for all rays?
         """
-        self.pos += self.k_vec * path_distance
+        print("kvec shape", self.k_vec.shape)
+        inverse_basis = np.linalg.inv(self.basis)  # for working out global position
+        path_distance = np.atleast_1d(path_distance)
+        # first do the rho multiplication, path_distance shouldn't be expanded in dims for broadcasting
+        self.rho = self.rho + path_distance * np.sin(self.theta)
+        # then broadcast for pos and kvec which are (n_rays, 3, 1) in size
+        path_distance = path_distance.reshape(path_distance.shape[0], 1, 1)
+        self.pos += self.k_vec * path_distance.reshape(path_distance.shape[0], 1, 1)
+        self.pos_global += (inverse_basis @ self.k_vec) * path_distance
+        print("rho shape", self.rho.shape)
+        print("rho shape after", self.rho.shape)
+
+        print("self.path_coords shape", self.path_coords.shape)
+        print("self.path_coords[:, :, -1] shape", self.path_coords[:, :, -1].shape)
+        self.path_coords = np.append(self.path_coords, (self.pos_global), axis=2)
+        # self.pos_global += (self.basis @ self.k_vec) * path_distance
+
+    def change_basis(self, basis: np.ndarray, calculate_efield=False):
+        """
+        Method to perform a change of (Cartesian) basis. Used for a folding mirror for example.
+        Basis is expressed in terms of the global Cartesian basis ((1, 0, 0), (0, 1, 0), (0, 0, 1)).
+        Therefore, to change basis, basis is INVERTED to global basis, then new basis is applied.
+
+        Args:
+            rays (PolarRays): PolarRays object associated with the DipoleSource to undergo basis change
+            basis (np.ndarray): 3x3 matrix, rows are basis vectors, expressed in the CURRENT basis.
+            calculate_efield (bool, optional): Apply matrices to rays.e-field. Only done when e-field is
+                calculated sequentially in tracing instead of at end in one operation. Defaults to False.
+        """
+        print("changing basis from", self.basis, "to", basis)
+        to_global_basis = np.linalg.inv(self.basis)  # to recover original basis
+        self.k_vec = basis @ to_global_basis @ self.k_vec
+        if calculate_efield:
+            self.e_field = basis @ to_global_basis @ self.e_field
+        self.transfer_matrix = basis @ to_global_basis @ self.transfer_matrix
+        self.basis = basis
+        self.update_polar_angles()
+
+    def update_polar_angles(self):
+        self.theta = np.arccos(self.k_vec[:, 2]).flatten()
+        self.phi = np.arctan2(self.k_vec[:, 1], self.k_vec[:, 0]).flatten()
+
+        negative_theta = self.theta < 0  # mask to replace negative ray height with phi += pi
+        self.theta[negative_theta] = -self.theta[negative_theta]
+        self.phi[negative_theta] = (self.phi[negative_theta] + np.pi) % (2 * np.pi)
 
     def calculate_intensity(self, scaling=np.array([1]), scale_by_density=True):
         """
@@ -131,18 +196,9 @@ class PolarRays:
         self.rho = self.rho[not_escaped]
         self.area_scaling = self.area_scaling[not_escaped]
         self.areas = self.areas[not_escaped]
-
-    def combine_rays(self, rays2):
-        """Combine two ray objects. currently not used"""
-        self.e_field = np.append(self.e_field, rays2.e_field, axis=1)
-        self.k_vec = np.append(self.k_vec, rays2.k_vec, axis=0)
-        self.transfer_matrix = \
-            np.append(self.transfer_matrix, self.transfer_matrix, axis=0)
-        self.phi = np.append(self.phi, rays2.phi)
-        self.theta = np.append(self.theta, rays2.theta)
-        self.rho = np.append(self.rho, rays2.rho)
-        self.area_scaling = np.append(self.area_scaling, rays2.area_scaling)
-        self.areas = np.append(self.areas, rays2.areas)
+        self.pos = self.pos[not_escaped]
+        self.pos_global = self.pos_global[not_escaped]
+        self.path_coords = self.path_coords[not_escaped, :, :]
 
     def set_zero_escaped_rays(self, escaped=None):
         if escaped is None:

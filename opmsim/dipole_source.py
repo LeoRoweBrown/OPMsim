@@ -5,7 +5,7 @@ from . import distribution_functions
 from .rays import PolarRays
 from .tools.misc import printif
 from . import matrices
-
+from opmsim.visualization.dipole_source_plots import plot_ray_sphere
 
 class DipoleSource:
     """
@@ -34,7 +34,7 @@ class DipoleSource:
         self.n_dipoles = len(phi_d_array)
 
         self.excitation_polarisation = None
-        self.rays = None
+        self.rays = PolarRays([], [])
 
         self._get_p_vec()
 
@@ -145,7 +145,7 @@ class DipoleSource:
             alphas = self.emission_scaling
             self.plot_distribution(alphas)
 
-    def plot_ray_sphere(self, phi, theta, plot_histo=False):
+    def plot_ray_sphere2(self, phi, theta, plot_histo=False):        
         warnings.warn("Moved plot_ray_sphere to visualization.dipole_source_plots", DeprecationWarning)
 
     def display_pupil_rays(self):
@@ -153,7 +153,7 @@ class DipoleSource:
 
     def get_rays_uniform(
             self, max_half_angle, f,
-            ray_count=5000, plot_sphere=False, ray_dist="uniform",
+            ray_count=5000, plot_sphere=True, ray_dist="uniform",
             ring_method="uniform_phi_inbetween"):
         """Get equal area elements in rings for uniform rays, also compute their area"""
 
@@ -166,7 +166,7 @@ class DipoleSource:
         else:
             raise Exception(f"Invalid ray distribution method '{ray_dist}'")
         if plot_sphere:
-            self.plot_ray_sphere(phi_k, theta_k)
+            plot_ray_sphere(phi_k, theta_k)
 
         self.max_half_angle = max_half_angle
         self.ray_area = areas  # do we need dipole_source to have this attribute?

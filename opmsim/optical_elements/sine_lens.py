@@ -2,6 +2,7 @@ import warnings
 from matplotlib import pyplot as plt
 import numpy as np
 from .base_element import Element
+from ..rays import PolarRays
 from .. import matrices
 
 
@@ -16,9 +17,15 @@ class SineLens(Element):
     """
 
     def __init__(
-            self, NA, focal_length, front_focal_length=None, back_focal_length=None, n=1,
-            y_axis_rotation=0, D=None, trace_after=True, update_history=False, flipped_orientation=False):
-        self.type = "SineLens"
+            self, NA, focal_length, dz=0,
+            front_focal_length=None, back_focal_length=None, n=1,
+            y_axis_rotation=0, D=None, trace_after=True,
+            update_history=False, flipped_orientation=False,
+            label=''):
+        super().__init__(
+            element_type='SineLens',
+            dz=dz,
+            label=label)
 
         # for immersion lenses, f used in the EP = 2*NA*f equation is the back focal length fb = fb*n
         # self.focal_length = focal_length
@@ -32,6 +39,7 @@ class SineLens(Element):
         self.n = n  # object size
         self.y_axis_rotation = y_axis_rotation  # when there is relative tilt between objectives i.e. OPM
         self.flipped_orientation = flipped_orientation
+        self.thickness = self.front_focal_length
 
         # used to determine if we stop ray tracing immediately after first surface
         self.trace_after = trace_after
@@ -53,13 +61,24 @@ class SineLens(Element):
     def trace_rays(self, rays, calculate_efield=False, debug_dir=None):
         # If lens is tilted (like O2 and O3), rotate rays relative to objective first
         if self.y_axis_rotation > 0:
-            self.rotate_rays_y(rays)
+            print("rotating rays!")
+            # self.rotate_rays_y(rays)
+            rotate_y = matrices.transformation.rotate_y(self.y_axis_rotation)
+            rays.change_basis(rotate_y)  # 
+            # rays.update_polar_angles()
 
         # Then refract according to lens orientation/whether rays are collimated or not
         if self.flipped_orientation:
+            print("Lens is flipped")
             self.focus_collimated_rays(rays)
         else:
+            print("Lens isn't flipped")
             self.collimate_rays(rays)
+
+        # plt.figure()
+        # plt.scatter(rays.pos[:, 0], rays.pos[:, 1])
+        # plt.title("ray positions (x, y)")
+        # plt.show()
 
     def focus_collimated_rays(self, rays):
         """
@@ -68,30 +87,46 @@ class SineLens(Element):
         Args:
             rays (np.ndarray): the N x 3 PolarRays matrix, where N is number of rays
         """
+
         # First, transform into meridional
         meridional_matrix = matrices.transformation.meridional_transform(rays.phi)
 
-        escape_mask_rho = abs(rays.rho) >= self.front_focal_length
-        rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
-        escape_mask_na = abs(rays.rho) > self.D / 2
-        rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
+        # Check if ray height exceeds focal length. For sine lens this would not be possible,
+        # mighrt be redundant considering the other mask (escape_mask_pupil)
+        # escape_mask_sine = abs(rays.rho) >= self.front_focal_length
+        # rays.escaped = np.logical_or(escape_mask_sine, rays.escaped)
+
+        escape_mask_pupil = abs(rays.rho) > self.D / 2
+        rays.escaped = np.logical_or(escape_mask_pupil, rays.escaped)
 
         lens_theta = np.arcsin(rays.rho / self.front_focal_length)  # positive is anticlockwise rotation
         if any(np.isnan(lens_theta)):
             warnings.warn("NaN values in lens theta - check that ray height is not greater than f")
 
-        rays.theta = rays.theta - lens_theta  # consider using k_vec to calculate rather than doing this?
+        # Propagate to curved surface from flat surface
+        distance_to_plane = self.front_focal_length * (1 - np.cos(lens_theta))
+        print("distance shape", distance_to_plane.shape)
+        rays.propagate(distance_to_plane)
+
+        old_theta = rays.theta
+        new_theta = rays.theta - lens_theta  # consider using k_vec to calculate rather than doing this?
+        rays.theta = new_theta
+
         refract_matrix = matrices.optical_elements.lens_refraction_meridional(-lens_theta)
 
         rays.rho_before_trace = rays.rho
-        if self.trace_after:
-            self.trace_f(rays)
 
         # Then transform back from meridional
         meridional_matrix_inv = matrices.transformation.meridional_transform(rays.phi, inverse=True)
 
-        rays.transfer_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix \
-            @ rays.transfer_matrix
+        lens_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix
+        rays.transfer_matrix = lens_matrix @ rays.transfer_matrix
+        rays.k_vec = lens_matrix @ rays.k_vec  # update k-vector
+
+        if self.trace_after:
+            rays.propagate(self.front_focal_length)
+
+        rays.area_scaling *= np.abs(np.cos(new_theta) / np.cos(old_theta))
 
     def collimate_rays(self, rays):
         """
@@ -101,14 +136,26 @@ class SineLens(Element):
             rays (np.ndarray): the N x 3 PolarRays matrix, where N is number of rays
         """
         # First, transform into meridional
+        print("Max theta:", np.max(rays.theta))
         meridional_matrix = matrices.transformation.meridional_transform(rays.phi)
 
-        self.trace_f(rays)  # trace to first surface
+        rays.propagate(self.front_focal_length)  # trace to first surface
 
-        escape_mask_rho = abs(rays.rho) >= self.front_focal_length
-        rays.escaped = np.logical_or(escape_mask_rho, rays.escaped)
-        if any(escape_mask_rho):
-            print(np.sum(escape_mask_rho), "rays escaped due to ray height")
+        # TODO remove, deprecated
+        # escape_mask_sine = abs(rays.rho) >= self.front_focal_length
+        # rays.escaped = np.logical_or(escape_mask_sine, rays.escaped)
+        # if any(escape_mask_sine):
+        #     print(np.sum(escape_mask_sine), "rays escaped (ray height > focal length)")
+
+        escape_mask_sine = abs(rays.theta) >= np.arcsin(self.NA / self.n)
+        rays.escaped = np.logical_or(escape_mask_sine, rays.escaped)
+        if any(escape_mask_sine):
+            print(np.sum(escape_mask_sine), "rays escaped (sine(theta) > NA/n)")
+
+        escape_mask_pupil = abs(rays.rho) >= self.D
+        rays.escaped = np.logical_or(escape_mask_pupil, rays.escaped)
+        if any(escape_mask_pupil):
+            print(np.sum(escape_mask_pupil), "rays escaped (ray height > pupil extent)")
 
         # lens_theta = np.arcsin(rays.rho/self.focal_length)  # positive is anticlockwise rotation
         lens_theta = rays.theta  # ... or just set angles to zero explicitly
@@ -139,14 +186,20 @@ class SineLens(Element):
         # Then transform back from meridional
         meridional_matrix_inv = matrices.transformation.meridional_transform(rays.phi, inverse=True)
 
-        rays.transfer_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix \
-            @ rays.transfer_matrix
+        lens_matrix = meridional_matrix_inv @ refract_matrix @ meridional_matrix
+        rays.transfer_matrix = lens_matrix @ rays.transfer_matrix
+        rays.k_vec = lens_matrix @ rays.k_vec  # update k-vector
 
-    def trace_f(self, rays):
-        """Trace by one focal length"""
+        distance_to_plane = self.front_focal_length * (1 - np.cos(lens_theta))
+        print("distance shape", distance_to_plane.shape)
+        rays.propagate(distance_to_plane)  # trace to flat surface
+
+    def trace_f(self, rays: PolarRays):
+        """Trace by one focal length. Calls rays.propagate now, so to deprecate TODO"""
         # self.n factor for water immersion objective
-        rays.rho = rays.rho + self.front_focal_length * np.sin(rays.theta)
-        rays.pos += rays.k_vec * self.front_focal_length  # needs work TODO
+        # rays.rho = rays.rho + self.front_focal_length * np.sin(rays.theta)
+        # rays.pos += rays.k_vec * self.front_focal_length  # needs work TODO
+        rays.propagate(self.front_focal_length)
 
     def rotate_rays_y(self, rays):
         """we only rotate our objectives not tube lenses!! this assumes that"""

@@ -1,15 +1,26 @@
 # Base class for all elements
 
 import numpy as np
+from ..rays import PolarRays
 
 class Element():
-    def __init__(self, dz=None):
-        self.type = 'Empty element'
+    def __init__(self, dz=0, element_type="", label=""):
+        self.type = element_type
         self.update_history = False
         self.matrix_list = dict()
-        self.dz = dz
+        self.dz = dz  # displacement relative to optical axis (defined as 3rd row in basis)
+        self.coords = np.array([0, 0, 0])  # for placement when plotting (in global Cartesian coords)
+        self.basis = np.array([[1, 0, 0],
+                               [0, 1, 0],
+                               [0, 0, 1]])
+        self.use_previous_basis = True
+        self.thickness = 0  # thickness of element in optical axis direction (for drawing). e.g. for lens it is f
+        self.label = label
 
-    def trace_rays(self, rays, calculate_efield=False, debug_dir=None):
+    def update_efield(self, rays: PolarRays):
+        rays.e_field = rays.transfer_matrix @ rays.e_field
+
+    def trace_rays(self, rays: PolarRays, calculate_efield=False, debug_dir=None):
         """
         Base method for tracing rays (PolarRays object).
         Implementation should apply transformations/tracing to the rays.k_vec, rays.theta, rays.phi, etc.,
@@ -22,7 +33,11 @@ class Element():
         CURRENTLY UNUSED. I think I will do ray propagation in PolarRays itself.
 
         Args:
-            rays (np.ndarray): PolarRays object associated with the DipoleSource
+            rays (np.ndarray): PolarRays object associated with the DipoleSource to be traced
+            calculate_efield (bool, optional): Apply matrices to rays.e-field when rays are traced, 
+                rather than e-fields only calculated at the end in one multiplication. Defaults to False.
+            debug_dir (_type_, optional): directory to save k-vec (or e-field if calculate_field true)
+                for debugging. Defaults to None.
         """
 
         rays.rho = rays.rho + self.dz * np.sin(rays.theta)
