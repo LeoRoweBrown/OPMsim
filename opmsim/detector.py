@@ -48,30 +48,6 @@ class Detector:
         self.ray_polar_radius = np.array([None] * rays.n_final)
         self.ray_phi = np.array([None] * rays.n_final)
 
-        from matplotlib import pyplot as plt
-        plt.figure()
-        plt.title("before detector")
-        plt.hist(rays.theta)
-        plt.xlabel("theta")
-        plt.show()
-
-        plt.figure()
-        plt.hist(rays.phi)
-        plt.xlabel("phi")
-        plt.show()
-        
-        plt.figure()
-        plt.scatter(rays.k_vec[:, 0], rays.k_vec[:, 1])
-        plt.xlabel("kx")
-        plt.ylabel("ky")
-        plt.show()
-
-        plt.figure()
-        plt.scatter(rays.k_vec[:, 0], rays.k_vec[:, 2])
-        plt.xlabel("kx")
-        plt.ylabel("kz")
-        plt.show()
-
         self.ray_polar_radius, self.ray_phi = self.get_final_polar_coords(rays, self.curved)
 
         # squeeze to avoid broadcasting and (N,N) arrays instead of N
@@ -79,10 +55,6 @@ class Detector:
         self.Iy_raw = rays.intensity_per_dipole_vector[:, 1]
         self.Ix_area_scaled = self.Ix_raw.squeeze() * rays.area_scaling
         self.Iy_area_scaled = self.Iy_raw.squeeze() * rays.area_scaling
-
-        plt.figure()
-        plt.scatter(self.ray_polar_radius, rays.area_scaling)
-        plt.show()
 
         self.ray_phi = np.asarray(self.ray_phi, dtype=np.float64)
 
@@ -99,13 +71,6 @@ class Detector:
         self.rays = rays
         self.n_rays = rays.n_final
         self.integrate_pupil()
-
-        # TODO REMOVE
-        # from matplotlib import pyplot as plt
-        # plt.figure()
-        # plt.imshow()
-
-        # np.set_printoptions(threshold=1000)
 
     def integrate_pupil(self):
         # print(self.ray_areas)

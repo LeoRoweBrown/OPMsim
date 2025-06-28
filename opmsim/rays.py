@@ -110,7 +110,6 @@ class PolarRays:
         Update ray position based on current k vector and path distance to propagate
         TODO: think about case where path_distance is not the same for all rays?
         """
-        print("kvec shape", self.k_vec.shape)
         inverse_basis = np.linalg.inv(self.basis)  # for working out global position
         path_distance = np.atleast_1d(path_distance)
         # first do the rho multiplication, path_distance shouldn't be expanded in dims for broadcasting
@@ -119,11 +118,6 @@ class PolarRays:
         path_distance = path_distance.reshape(path_distance.shape[0], 1, 1)
         self.pos += self.k_vec * path_distance.reshape(path_distance.shape[0], 1, 1)
         self.pos_global += (inverse_basis @ self.k_vec) * path_distance
-        print("rho shape", self.rho.shape)
-        print("rho shape after", self.rho.shape)
-
-        print("self.path_coords shape", self.path_coords.shape)
-        print("self.path_coords[:, :, -1] shape", self.path_coords[:, :, -1].shape)
         self.path_coords = np.append(self.path_coords, (self.pos_global), axis=2)
         # self.pos_global += (self.basis @ self.k_vec) * path_distance
 

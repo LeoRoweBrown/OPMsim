@@ -64,8 +64,7 @@ class SineLens(Element):
             print("rotating rays!")
             # self.rotate_rays_y(rays)
             rotate_y = matrices.transformation.rotate_y(self.y_axis_rotation)
-            rays.change_basis(rotate_y)  # 
-            # rays.update_polar_angles()
+            rays.change_basis(rotate_y)
 
         # Then refract according to lens orientation/whether rays are collimated or not
         if self.flipped_orientation:
@@ -74,11 +73,6 @@ class SineLens(Element):
         else:
             print("Lens isn't flipped")
             self.collimate_rays(rays)
-
-        # plt.figure()
-        # plt.scatter(rays.pos[:, 0], rays.pos[:, 1])
-        # plt.title("ray positions (x, y)")
-        # plt.show()
 
     def focus_collimated_rays(self, rays):
         """
@@ -136,7 +130,6 @@ class SineLens(Element):
             rays (np.ndarray): the N x 3 PolarRays matrix, where N is number of rays
         """
         # First, transform into meridional
-        print("Max theta:", np.max(rays.theta))
         meridional_matrix = matrices.transformation.meridional_transform(rays.phi)
 
         rays.propagate(self.front_focal_length)  # trace to first surface
