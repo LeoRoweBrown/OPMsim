@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from matplotlib import axes
 from ..optical_elements.sine_lens import SineLens
 from ..optical_elements.base_element import Element
-from ..matrices.transformation import rotate_y 
+from ..matrices.transformation import rotate_y
 
 def draw_sine_lens(ax: axes.Axes, sine_lens: SineLens, view='xz', color='k'):
     """

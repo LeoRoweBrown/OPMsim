@@ -17,10 +17,10 @@ class SineLens(Element):
     """
 
     def __init__(
-            self, NA, focal_length, dz=0,
+            self, NA: float, focal_length: float, dz=0,
             front_focal_length=None, back_focal_length=None, n=1,
             y_axis_rotation=0, D=None, trace_after=True,
-            update_history=False, flipped_orientation=False,
+            flipped_orientation=False,
             label=''):
         super().__init__(
             element_type='SineLens',
@@ -43,7 +43,6 @@ class SineLens(Element):
 
         # used to determine if we stop ray tracing immediately after first surface
         self.trace_after = trace_after
-        self.update_history = update_history
 
         if D is None:  # equation for objective lens
             # D = 2*f_back*NA = 2*f_front*NA/n

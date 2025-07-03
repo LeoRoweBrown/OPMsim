@@ -6,6 +6,8 @@ from .rays import PolarRays
 from .tools.misc import printif
 from . import matrices
 from opmsim.visualization.dipole_source_plots import plot_ray_sphere
+from opmsim.visualization.dipole_source_plots import plot_points_on_sphere
+from opmsim.visualization.dipole_source_plots_3d import plot_dipole_source_3d
 
 class DipoleSource:
     """
@@ -114,8 +116,11 @@ class DipoleSource:
     def depolarise(self, correlation_time, fluorescence_lifetime, timepoints=100):
         raise NotImplementedError()
 
-    def plot_distribution(self, alphas=[]):
-        raise NotImplementedError("Moved to visualization package!")
+    def plot_distribution(self, alphas=[], show_plot=True):
+        """Plot dipole distribution on sphere and return mpl figure"""
+        return plot_points_on_sphere(
+            self.alpha_d, self.phi_d, self.emission_scaling, show_plot=show_plot)
+        # raise NotImplementedError("Moved to visualization package!")
 
     def classical_photoselection(self, excitation_polarisation, plot=True):
         """Scale the intensity from dipoles based on their orientation and the

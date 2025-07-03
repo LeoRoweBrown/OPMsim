@@ -2,11 +2,13 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-def plot_points_on_sphere(alpha, phi, alphas=(), directional_arrow=None):
+def plot_points_on_sphere(alpha, phi, alphas=(), directional_arrow=None, show_plot=True):
     """
-    Plot points described by polar angle, alpha, and azimuthal angle, phi, on a sphere. Alpha measured from x.
+    Plot points described by polar angle, alpha, and azimuthal angle, phi, on a sphere. 
+    Alpha measured from x.
 
-    :param directional_arrow: directional arrow (alpha, phi), indicates polarization direction for photoselection
+    :param directional_arrow: directional arrow (alpha, phi), indicates polarization 
+        direction for photoselection
     :param alpha:
     :param phi:
     :param alphas:
@@ -105,8 +107,9 @@ def plot_points_on_sphere(alpha, phi, alphas=(), directional_arrow=None):
             ax_zy.arrow(
                 0, 0, -(1 - w) * z_ex, -(1 - w) * y_ex, head_width=0.2, head_length=0.2, linewidth=2
             )  # ,length_includes_head=True)
-    plt.show()
-
+    if show_plot:
+        plt.show()
+    return f2d
 
 def plot_ray_sphere(phi, theta, plot_histo=False):
     x = np.sin(theta) * np.sin(phi)

@@ -216,8 +216,8 @@ class SineLens(BaseElement):
         old_theta = rays.theta
 
         if all(rays.rho == 0):
-            x = np.sin(rays.theta)*np.cos(rays.phi)
-            y = np.sin(rays.theta)*np.sin(rays.phi) 
+            x = np.sin(rays.theta) * np.cos(rays.phi)
+            y = np.sin(rays.theta) * np.sin(rays.phi)
 
         # this condition means first surface is flat (parallel/collimated incoming rays)
         if all(abs(old_theta[np.invert(rays.escaped)]) < 1e-10):  # soft inequality for theta = 0
