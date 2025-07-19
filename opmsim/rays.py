@@ -45,16 +45,20 @@ class PolarRays:
         ))
         self.k_vec = np.expand_dims(self.k_vec, axis=-1)
         self.e_field = np.zeros_like(self.k_vec)
+        self.e_field_pre = 0j
         self.phi = phi_array
         self.theta = theta_array
         self.rho = np.zeros_like(phi_array)  # cylindrical coordinate rho, radial distance of ray from optical axis
         self.rho_before_trace = None  # used to store the rho before tracing, sometimes useful
         self.initial_path_length = initial_path_length  # for calculating initial phase, TODO: not used maybe remove
+        
+        # NOTE: pos and pos_global are temp variables, while path_coords/path_coords_local stores each position in full
         self.pos = np.zeros((len(phi_array), 3, 1))  # position of ray in Cartesian coords in current basis
-
         # current position of ray in Cartesian coords in original basis (n_rays, 3, 1), 1 for broadcasting
         self.pos_global = np.zeros((len(phi_array), 3, 1))
         self.path_coords = np.zeros((len(phi_array), 3, 1))  # (global basis) coords for ray path (n_rays, 3, n_coords)
+        self.path_coords_local = np.zeros((len(phi_array), 3, 1))  # local basis version of path_coords
+
         self.total_intensity_initial = np.zeros_like(self.e_field)
 
         self.optical_axis = 0  # todo: make 3 element vector
@@ -65,6 +69,7 @@ class PolarRays:
             area_elements = np.ones(self.n)  # TODO place with area calculation of cap
         self.areas = area_elements  # area elements dA assoicated with each ray that build up the spherical surface
         self.area_scaling = np.ones(self.n)  # for scaling energy when flat and curved wavefronts
+        self.emission_scaling = np.ones(1)
 
         self.transfer_matrix = np.tile(
             np.identity(3, dtype=np.complex128), (1, self.n, 1, 1))
@@ -119,6 +124,7 @@ class PolarRays:
         self.pos += self.k_vec * path_distance.reshape(path_distance.shape[0], 1, 1)
         self.pos_global += (inverse_basis @ self.k_vec) * path_distance
         self.path_coords = np.append(self.path_coords, (self.pos_global), axis=2)
+        self.path_coords_local = np.append(self.path_coords_local, (self.pos), axis=2)
         # self.pos_global += (self.basis @ self.k_vec) * path_distance
 
     def change_basis(self, basis: np.ndarray, calculate_efield=False):
@@ -150,11 +156,13 @@ class PolarRays:
         self.theta[negative_theta] = -self.theta[negative_theta]
         self.phi[negative_theta] = (self.phi[negative_theta] + np.pi) % (2 * np.pi)
 
-    def calculate_intensity(self, scaling=np.array([1]), scale_by_density=True):
+    def calculate_intensity(self, scaling=None, scale_by_density=True):
         """
         calculate field intensity on wavefront surface for the current
         rays object, scaled by photoselection (scaling), which depends ontthe dipole object
         """
+        if scaling is None:
+            scaling = self.emission_scaling  # scaling from dipole photoselection
         intensity_vector = np.real(self.e_field * np.conj(self.e_field)) * scaling
         self.intensity_per_dipole_vector = np.mean(intensity_vector, axis=0)
         intensity_per_dipole = np.sum(self.intensity_per_dipole_vector, axis=1)
@@ -193,6 +201,7 @@ class PolarRays:
         self.pos = self.pos[not_escaped]
         self.pos_global = self.pos_global[not_escaped]
         self.path_coords = self.path_coords[not_escaped, :, :]
+        self.path_coords_local = self.path_coords_local[not_escaped, :, :]
 
     def set_zero_escaped_rays(self, escaped=None):
         if escaped is None:

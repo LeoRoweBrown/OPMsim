@@ -26,10 +26,10 @@ class Detector:
 
         self.interpolated = False
         self.is_binning_detector = False
-        self.Ix_integral = None  # these are not implemented yet
-        self.Iy_integral = None
-        self.I_total_integral = None
-        self.max_r = None
+        self.Ix_integral = 0.  # these are not implemented yet
+        self.Iy_integral = 0.
+        self.I_total_integral = 0.
+        self.max_r = 0.
         self.info = None
         self.isinitial = False
 

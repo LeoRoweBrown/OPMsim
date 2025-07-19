@@ -1,3 +1,5 @@
+import os
+from matplotlib import pyplot as plt
 import numpy as np
 from numpy.typing import NDArray
 from .. import matrices
@@ -6,23 +8,33 @@ from .base_element import Element
 
 class FlatMirror(Element):
     """
-    Flat mirror with rotation about y axis
-    TODO: make fast version of this without all the tracing and such..
+    Flat mirror with custom tilt about y axis (rot_y) and constant value for reflectance.
+    See ProtectedMirror and UnprotectedMirror for thin film and Fresnel versions
     """
 
     def __init__(
             self,
-            rot_y=0,
-            reflectance=1,
+            rot_y: float = 0.0,
+            reflectance: float = 1.0,
             plot_debug=False,
             label=''):
+        """
+        Args:
+            rot_y (float, optional): rotation about y-axis in degrees. Defaults to 0.0.
+            reflectance (float, optional): constant reflectance (reflection matrix diagonals). Defaults to 1.0.
+            plot_debug (bool, optional): CURRENTLY UNUSED TODO REMOVE. Defaults to False.
+            label (str, optional): Element label. Defaults to ''.
+        """
 
         super().__init__(
             element_type='FlatMirror',
             label=label)
         self.mirror_type = "perfect"  # e.g. uncoated, protected
-        self.rot_y = rot_y  # rotation in y
+        self.rot_y = rot_y  # rotation in y, in degrees
+        if self.rot_y > 90:
+            raise ValueError("Mirror rotation cannot exceed 90 degrees")
         self.reflectance = reflectance
+        self.retardance = True
         self.basis = np.array([
             [-1, 0, 0],
             [0, 1, 0],
@@ -48,9 +60,10 @@ class FlatMirror(Element):
         k_vec_norm = rays.k_vec / np.linalg.norm(rays.k_vec, axis=1).reshape(rays.k_vec.shape[0], 1, 1)
 
         # get N vector
-        N = np.array([-np.tan(self.rot_y), 0, -1])
+        N = np.array([-np.tan(self.rot_y * np.pi / 180), 0, -1])
         N = N / np.linalg.norm(N)
         N = N.reshape(1, 3, 1)
+        print("normal vector", N)
 
         p = np.cross(k_vec_norm, N, axis=1)  # get p vector (k × N) (s wave comp unit?)
         kdotN = np.sum(k_vec_norm * N, 1)
@@ -59,6 +72,12 @@ class FlatMirror(Element):
         # normalize since we compute the angles without the normalization factor...
         p = self.normalize(p)
         r = self.normalize(r)
+
+        ax = plt.figure().add_subplot(projection='3d')
+        ax.quiver(0, 0, 0, N[0, 0, 0], N[0, 1, 0], N[0, 2, 0], color='red', label='N')
+        ax.quiver(0, 0, 0, p[0, 0, 0], p[0, 1, 0], p[0, 2, 0], color='blue', label='p')
+        ax.quiver(0, 0, 0, r[0, 0, 0], r[0, 1, 0], r[0, 2, 0], color='green', label='r')
+        ax.legend()
 
         parallel = r[:, :, 0]
         senkrecht = p[:, :, 0]
@@ -99,10 +118,10 @@ class ProtectedFlatMirror(FlatMirror):
     """Inherits from FlatMirror, calculates Fresnel matrix from thin-film theory for protected mirror"""
     def __init__(
             self,
-            rot_y=0,
-            film_thickness=100e-9,
-            n_film_file="../refractive_index_data/SiO2.txt",
-            n_substrate_file="../refractive_index_data/Ag.txt",
+            rot_y: float = 0,
+            film_thickness: float = 100.e-9,
+            n_film_file: str = "../refractive_index_data/SiO2.txt",
+            n_substrate_file: str = "../refractive_index_data/Ag.txt",
             retardance=True,
             label=""):
 
@@ -138,8 +157,8 @@ class ProtectedFlatMirror(FlatMirror):
 class UncoatedFlatMirror(FlatMirror):
     def __init__(
             self,
-            rot_y=0,
-            n_file="../refractive_index_data/SiO2.txt",
+            rot_y: float = 0.,
+            n_file: str = "../refractive_index_data/SiO2.txt",
             retardance=True,
             label=""):
 

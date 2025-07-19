@@ -1,62 +1,11 @@
 from time import time
+from warnings import warn
 import numpy as np
 from matplotlib import pyplot as plt
 from . import matrices
 import math
 
-
-def mc_sampler_photoselection(N, excitation_polarisation, maxiter=10000):
-
-    # may never use this, can only image being useful in proving different phis (representing different
-    # light-sheet approaching from different angles or rotating sample) are the same, and that changing
-    # polarisation to z polarised dramatically reduces signal
-
-    # we want this to be able to take a generalised polarisation and use Monte Carlo to generate
-    # photoselection, was thinking of using p_vector.excitation_vector for the cos^2 value
-    phi_exc, alpha_exc = excitation_polarisation
-    # phi_d are generated in the monte carlo
-    # cos_d_exc = np.cos(alpha_exc)*np.cos(phi_exc)*np.cos(alpha_d)*np.cos(phi_d) +\
-    #     np.cos(alpha_exc)*np.sin(phi_exc)*np.cos(alpha_d)*np.sin(phi_d) +\
-    #     np.sin(alpha_exc)*np.sin(alpha_d)
-    # mc uses cos_d_exc**2*cos(alpha), where cos_d_exc is a function of phi_d,exc, alpha_d,exc
-
-    print("Sampling %d points for photoselection (modified Monte Carlo Rejection method)" % N)
-    accepted_phi_d = np.zeros(N)
-    accepted_alpha_d = np.zeros(N)
-    # normalise pdf
-    phi_range = 2 * np.pi
-    theta_range = np.pi / 2
-
-    n = 0
-    i = 0
-    while n < N and i < N * maxiter:
-        phi_d = np.random.random() * phi_range
-        alpha_d = np.random.random() * theta_range
-
-        cos_d_exc = (
-            np.cos(alpha_exc) * np.cos(phi_exc) * np.cos(alpha_d) * np.cos(phi_d)
-            + np.cos(alpha_exc) * np.sin(phi_exc) * np.cos(alpha_d) * np.sin(phi_d)
-            + np.sin(alpha_exc) * np.sin(alpha_d)
-        )
-
-        # products of trig, should be normalised already to 1?
-        pdf = np.abs(np.cos(alpha_d) * cos_d_exc)
-        if pdf > 1:
-            raise ValueError("PDF greater than 1")
-        if pdf < 0:
-            raise ValueError("PDF less than 0")
-        p_rand = np.random.random()
-        if p_rand < pdf:  # if under curve accept point
-            accepted_phi_d[n] = phi_d
-            accepted_alpha_d[n] = alpha_d
-            n += 1
-        i += 1
-    if i >= N * maxiter:
-        raise StopIteration("Too many tries to obtain fully sampled distribution")
-
-    return accepted_phi_d, accepted_alpha_d
-    # raise NotImplementedError()
-
+MIN_FIBONACCI_SAMPLES_SPHERE = 10
 
 def uniform_mc_sampler(pdf, input_range, N, maxiter=10000, plot=True):
     """Use Monte Carlo simulation to generate a sample from a PDF"""
@@ -93,7 +42,12 @@ def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
                              point_count=5000,
                              method="rings_phi_inbetween",
                              hemisphere=True):
-    """Get equal area elements in rings for uniform rays, also compute their area"""
+    """
+    Get equal area elements in rings for uniform rays, also compute their area.
+    Legacy method that I used to check anisotropy is correct and is symmetric.
+    Looks like Fibonacci method has radially asymmetric residuals between theory and sim anisotropy
+
+    """
 
     if hemisphere:
         N = point_count * 2
@@ -142,13 +96,6 @@ def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
     # get closest match to NA
     max_theta_idx = np.min(np.where(thetas > needed_max_theta))
 
-    # when I was doing this last ring is half width thing so that edge landed on edge
-    # of collection, theta scaling was changed to be this:
-    # change: scale to thetas[max_theta_idx] + thetas[max_theta_idx+1])/2
-    # instead of thetas[max_theta_idx] so that ray actually goes at asin(NA/n) angle
-    # theta_scaling = needed_max_theta/((thetas[max_theta_idx] + thetas[max_theta_idx+1])/2)
-
-    # it is now this (again)
     theta_scaling = needed_max_theta / thetas[max_theta_idx]
 
     if hemisphere:
@@ -169,11 +116,7 @@ def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
         dtheta = thetas[i + 1] - thetas[i]
         theta = (thetas[i + 1] + thetas[i]) / 2
         circumference = 2 * np.pi * np.sin(theta)
-        ring_area_man = circumference * dtheta
 
-        # I try a few methods to evaluate area elements
-        # area of ring treating it as a flat surface ring
-        area_manual = ring_area_man / n_cells_fitting[i + 1]
         # accounts for curvature (correct for all dtheta)
         area_cap_method = 2 * np.pi * (np.cos(thetas[i]) - np.cos(thetas[i + 1])) / n_cells_fitting[i + 1]
 
@@ -196,52 +139,108 @@ def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
         phi_vals_on_ring.append(phi_vals)
         phi_k = np.append(phi_k, phi_vals)
         theta_k = np.append(theta_k, [theta] * n_cells_fitting[i + 1])
-        # actually not sure what is being used as area here..
-        # area_k = np.append(area_k, [area] * n_cells_fitting[i + 1])
-        areas_alt_k = np.append(areas_alt_k, [area_manual] * n_cells_fitting[i + 1])
         areas_usingcaps = np.append(areas_usingcaps, [area_cap_method] * n_cells_fitting[i + 1])
 
     costheta = (1 - np.sin(max_half_angle)**2) ** 0.5
     expected_area = 2 * np.pi * (1 - costheta)
 
-    print("cap method area sum", np.sum(areas_usingcaps))
-    print("expected area sum", expected_area)
-
     return (phi_k, theta_k, areas_usingcaps)
 
+def fibonacci_dipole_generation(point_count=1000):
+    """
+    Generate uniform spherical dist of dipoles using Fibonacci sphere method. 
 
-def fibonacci_sphere_rays(max_half_angle=(np.pi / 2), samples=1000):
-    samples *= 2  # account for hemisphere
-    points = np.zeros((samples, 3))
+    Args:
+        point_count (int, optional): Number of points to generate. Defaults to 1000.
+
+    Raises:
+        ValueError: If point count is too low for reasonable distribution (MIN_FIBONACCI_SAMPLES_SPHERE)
+
+    Returns:
+        tuple: phi, theta, areas: Azimuth, polar angles and the area of each element
+    """
+    if point_count < MIN_FIBONACCI_SAMPLES_SPHERE:  # reasonable limitation
+        raise ValueError(f"At least {MIN_FIBONACCI_SAMPLES_SPHERE} dipoles required for Fibonacci ensemble")
+    phi, theta, areas = fibonacci_sphere(max_half_angle=2 * np.pi, point_count=point_count, full_sphere=True)
+    return phi, theta, areas
+
+def fibonacci_ray_generation(max_half_angle=(np.pi / 2), point_count=1000):
+    """Generate rays using fibonacci method (calls fibonacci_sphere)
+
+    Args:
+        max_half_angle (tuple, optional): max half polar angle of sphere pi/2 -> hemisphere. Defaults to (np.pi / 2)
+        point_count (int, optional): Number of points to generate. Defaults to 1000.
+        show_plot (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        tuple: phi, theta, areas: Azimuth, polar angles and the area of each element
+
+    """
+    phi, theta, areas = fibonacci_sphere(max_half_angle, point_count * 2, full_sphere=False)
+    # mask_theta = np.logical_and(theta > 0, theta < max_half_angle)
+    # theta = theta[mask_theta]
+    # phi = phi[mask_theta]
+    # areas = areas[mask_theta]
+    if len(theta) == 0:  # if NA is so small and point count so low that mask masks out all rays
+        theta = np.zeros(1)
+        phi = np.zeros(1)
+        areas = np.ones(1) * 2 * np.pi * (1 - np.cos(max_half_angle))
+    return phi, theta, areas
+
+def fibonacci_sphere(max_half_angle,
+                     point_count,
+                     full_sphere=False,
+                     show_plot=False):
+    """
+    Generate points on a sphere for dipoles and rays.
+
+    Args:
+        max_half_angle (tuple, optional): max half polar angle of sphere pi/2 -> hemisphere. Defaults to (np.pi / 2).
+        point_count (int, optional): Number of points to generate. Defaults to 1000.
+        full_sphere (bool, optional): . Defaults to True.
+        show_plot (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        tuple: (phi_k, theta_k, areas)
+    """
+    points = np.zeros((point_count, 3))
     phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
 
-    for i in range(samples):
-        y = 1 - (i / float(samples - 1)) * 2  # y goes from 1 to -1
-        radius = np.sqrt(1 - y * y)  # radius at y
+    if point_count < 20:
+        warn(f"point_count of {point_count} too low to give reasonably uniform distribution!")
+    if point_count == 0:
+        return np.array([]), np.array([]), np.array([])
+    elif point_count == 1:
+        points[0, :] = [1, 0, 0]  # just do x-dipole
+    else:
+        for i in range(point_count):
+            y = 1 - (i / float(point_count - 1)) * 2  # y goes from 1 to -1
+            radius = np.sqrt(1 - y * y)  # radius at y
 
-        theta = phi * i  # golden angle increment
+            theta = phi * i  # golden angle increment
 
-        x = np.cos(theta) * radius
-        z = np.sin(theta) * radius
+            x = np.cos(theta) * radius
+            z = np.sin(theta) * radius
 
-        points[i, :] = [x, y, z]
-        # points.append((x, y, z))
+            points[i, :] = [x, y, z]
+
+    if not full_sphere:
+        mask = np.arccos(points[:, 2]) < max_half_angle
+        points = points[mask, :]
 
     # cartesian to polar
-    # print("points ", points)
-    mask = points[:, 2] > 0
-    theta_k = np.arccos(points[mask, 2])
-    phi_k = np.arctan2(points[mask, 1], points[mask, 0])
-    mask_theta = np.sin(theta_k) < np.sin(max_half_angle)
+    theta_k = np.arccos(points[:, 2])
+    phi_k = np.arctan2(points[:, 1], points[:, 0])
 
     # calculate area on unit sphere associated with each ray
     # 2*np.pi*(1-costheta) is cap area
     sintheta = np.sin(max_half_angle)
     costheta = (1 - sintheta**2) ** 0.5
-    areas = np.ones(len(phi_k[mask_theta])) * 2 * np.pi * (1 - costheta) / len(phi_k[mask_theta])
+    areas = np.ones(len(phi_k)) * 2 * np.pi * (1 - costheta) / len(phi_k)
 
-    plt.figure()
-    plt.scatter(phi_k[mask_theta], theta_k[mask_theta])
-    plt.show()
+    if show_plot:
+        plt.figure()
+        plt.scatter(phi_k, theta_k)
+        plt.show()
 
-    return (phi_k[mask_theta], theta_k[mask_theta], areas)
+    return phi_k, theta_k, areas

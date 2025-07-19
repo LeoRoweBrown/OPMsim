@@ -5,7 +5,7 @@ from tkinter import ttk
 from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg)
 from matplotlib import pyplot as plt
 from inspect import signature
-from typing import get_type_hints
+from typing import get_type_hints, get_args
 import numpy as np
 
 from opmsim.optical_system import OpticalSystem
@@ -15,23 +15,19 @@ from opmsim.optical_elements.wave_plate import WavePlate
 from opmsim.optical_elements.linear_polariser import LinearPolariser
 from opmsim.optical_elements.flat_mirror import FlatMirror, ProtectedFlatMirror, UncoatedFlatMirror
 from opmsim.gui.tk_widgets import ElementFrame, ScrollableFrame
-from opmsim.visualization.dipole_source_plots_3d import plot_dipole_source_3d
+from opmsim.visualization.dipole_plot_for_gui import plot_dipole_source_3d
+from opmsim.visualization.optical_system_diagram import OpticalSystemDiagram
+# from opmsim.visualization.ray_tracing_plots import
 
 class SystemDesignerApp():
     def __init__(self, root) -> None:
         self.root = root
         self.width = 1280
         self.height = 720
+        self.root.title("OPMsim")
         self.root.geometry(f"{self.width}x{self.height}")  # Set window size directly
         # self.canvas = tk.Canvas(root, width=self.width, height=self.height)
         # self.canvas.pack()
-        self.ray_diagram_frame = tk.Frame(root, highlightbackground="gray", highlightthickness=2)
-        self.ray_diagram_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=0, pady=0)
-
-        self.fig, self.ax = plt.subplots()
-        self.mpl_canvas = FigureCanvasTkAgg(self.fig, self.ray_diagram_frame)
-        self.mpl_canvas.draw()
-        self.mpl_canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         self.elementClasses = [
             SineLens,
@@ -51,6 +47,7 @@ class SystemDesignerApp():
             }
         print(self.element_info)
 
+        self.init_main_sim_bar()
         self.init_optical_system()
         self.init_element_config_bar()
         self.init_source_config_bar()
@@ -58,27 +55,65 @@ class SystemDesignerApp():
 
         tk.Tk.report_callback_exception = self.show_uncaught_error
 
+    def init_main_sim_bar(self):
+        self.main_sim_frame = tk.Frame(self.root, width=640, highlightbackground="red", highlightthickness=2)
+        self.main_sim_frame.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
+        self.main_sim_frame.pack_propagate(False)
+
+        self.ray_diagram_frame = tk.Frame(
+            self.main_sim_frame, highlightbackground="green", highlightthickness=2)
+        self.ray_diagram_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # Init the system diagram as an empty plot
+        self.system_diagram_fig, self.system_diagram_ax = plt.subplots()
+        self.diagram_mpl_canvas = FigureCanvasTkAgg(self.system_diagram_fig, self.ray_diagram_frame)
+        self.diagram_mpl_canvas.draw()
+        self.diagram_mpl_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # self.mpl_canvas.get_tk_widget().pack_propagate(True)
+
+        # Init the system object and diagram (empty, no elements or source)
+        self.optical_system = OpticalSystem()
+        self.optical_system.debug_plots = True
+        self.system_diagram = OpticalSystemDiagram(self.optical_system)
+
+        self.sim_control_frame = tk.Frame(self.main_sim_frame, highlightbackground="blue",
+                                          background='green', highlightthickness=2)
+        self.sim_control_frame.pack(side=tk.TOP, fill=tk.BOTH)
+        self.n_rays_tk_var = tk.StringVar()
+        self.n_rays_tk_var.set('200')
+        self.n_rays_field = tk.Entry(self.sim_control_frame, textvariable=self.n_rays_tk_var)
+        self.preview_rays_button = tk.Button(
+            self.sim_control_frame, text='Preview ray-tracing', command=self.preview_raytrace)
+        self.preview_rays_button.pack(side=tk.LEFT)
+        self.calculate_efields_button = tk.Button(
+            self.sim_control_frame, text='Run simulation', command=self.preview_raytrace)
+        self.calculate_efields_button.pack(side=tk.LEFT)
+
     def init_source_config_bar(self):
         self.source_config_container = tk.Frame(
-            self.root, width=320, highlightbackground="blue", highlightthickness=2)
+            self.root, width=320, highlightbackground="blue", highlightcolor='blue', highlightthickness=2)
         self.source_config_container.pack(side=tk.LEFT, fill=tk.BOTH, padx=0, pady=0)
         self.source_config_container.pack_propagate(False)  # Prevent the frame from resizing to fit child widgets
 
-        self.dipole_view_frame = tk.Frame(self.source_config_container)
+        # 3D plot widget of dipole source GUI element
+        self.dipole_view_frame = tk.Frame(self.source_config_container, height=320,
+                                          highlightbackground="green", highlightthickness=5)
         self.dipole_view_label = tk.Label(self.dipole_view_frame, text="Dipole source")
         self.dipole_view_label.pack()
         self.dipole_fig, self.dipole_ax = plt.subplots()
         self.mpl_canvas = FigureCanvasTkAgg(self.dipole_fig, self.dipole_view_frame)
         self.mpl_canvas.draw()
         self.mpl_canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-        self.dipole_view_frame.pack(expand=True)
+        self.dipole_view_frame.pack(expand=False, fill=tk.X)
+        self.dipole_view_frame.pack_propagate(False)
 
+        # Dipole settings GUI elements
         self.configure_dipoles_frame = tk.Frame(
             self.source_config_container
         )
-        self.configure_dipoles_frame.pack(expand=True)
+        self.configure_dipoles_frame.pack(fill=tk.X, padx=5, pady=5)
         self.dipole_source_label = tk.Label(self.configure_dipoles_frame, text="Dipole source type")
-        self.dipole_source_label.pack()
+        self.dipole_source_label.grid(row=1, column=1)
         self.dipole_source_combobox = ttk.Combobox(self.configure_dipoles_frame, state='readonly')
         self.dipole_source_combobox['values'] = [
             'Uniform source',
@@ -86,29 +121,81 @@ class SystemDesignerApp():
             'y-dipole',
             'z-dipole'
         ]
-        self.dipole_source_combobox.current(0)
-        self.dipole_source_combobox.pack()
+        self.dipole_source_combobox.current(1)
+        self.dipole_source_combobox.grid(row=1, column=2, padx=2, pady=2)
         self.dipole_source_combobox.bind("<<ComboboxSelected>>", self.set_dipole_source)
 
         self.dipole_count = 500
         self.dipole_count_tk_var = tk.StringVar()
         self.dipole_count_tk_var.set(f'{self.dipole_count}')
         self.dipole_count_label = tk.Label(self.configure_dipoles_frame, text="Dipole count")
-        self.dipole_count_label.pack(side=tk.LEFT)
-        self.dipole_count_entry = tk.Entry(self.configure_dipoles_frame, textvariable=self.dipole_count_tk_var)
-        self.dipole_count_tk_var.trace_add('write', self.update_dipole_count)
-        self.dipole_count_entry.pack(side=tk.LEFT)
+        self.dipole_count_label.grid(row=2, column=1, padx=2, pady=2)
+        self.dipole_count_entry = tk.Entry(
+            self.configure_dipoles_frame, textvariable=self.dipole_count_tk_var)
+        self.dipole_count_entry.bind("<Return>", self.update_dipole_count)
+        # self.dipole_count_entry.bind("<FocusOut>", self.update_dipole_count)
+        self.dipole_count_entry.grid(row=2, column=2, padx=2, pady=2)
 
-        self.configure_excitation_frame = tk.Frame(
-            self.source_config_container
-        )
-        self.configure_excitation_frame.pack(expand=True)
-        self.excitation_config_label = tk.Label(self.configure_excitation_frame, text="Excitation settings")
-        self.excitation_config_label.pack()
+        # Excitation config GUI elements
+        self.excitation_var_phi = tk.StringVar()
+        self.excitation_var_alpha = tk.StringVar()
+        self.excitation_label = tk.Label(self.configure_dipoles_frame, text="Excitation direction")
+        self.excitation_label.grid(row=3, column=1, padx=2, pady=2)
+        self.excitation_combobox = ttk.Combobox(self.configure_dipoles_frame, state='readonly')
+        self.excitation_combobox['values'] = [
+            'Unpolarised/rapidly tumbling',
+            'x-dipole',
+            'y-dipole',
+            'z-dipole'
+        ]
+        self.excitation_combobox.current(0)
+        self.excitation_combobox.grid(row=3, column=2, padx=2, pady=2)
+        self.excitation_combobox.bind("<<ComboboxSelected>>", self.set_excitation)
+        self.update_dipole_source_button = tk.Button(
+            self.configure_dipoles_frame, text="Update", command=self.set_dipole_source)
+        self.update_dipole_source_button.grid(row=4, column=2, padx=2, pady=2)
+
+        self.set_dipole_source()
+
+    def init_element_config_bar(self):
+        self.element_list_and_config_container = tk.Frame(
+            self.root, width=320, highlightbackground="blue", highlightthickness=2)
+        self.element_list_and_config_container.pack(side=tk.LEFT, fill=tk.BOTH, padx=0, pady=0)
+        self.element_list_and_config_container.pack_propagate(False)  # Prevent the frame from resizing to fit child widgets
+
+        self.init_element_list_widget(self.element_list_and_config_container)
+        self.init_add_element_widget(self.element_list_and_config_container)
+
+    def preview_raytrace(self, *args):
+        self.optical_system.trace_system(preview=True)
+        self.system_diagram = OpticalSystemDiagram(self.optical_system)
+        self.system_diagram.draw_rays()
+        self.system_diagram_fig, self.system_diagram_ax = self.system_diagram.fig, self.system_diagram.ax
+        self.diagram_mpl_canvas.get_tk_widget().destroy()
+        self.diagram_mpl_canvas = FigureCanvasTkAgg(self.system_diagram_fig, self.ray_diagram_frame)
+        self.diagram_mpl_canvas.draw()
+        self.diagram_mpl_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    def set_excitation(self, *args):
+        """Called by set_dipole to set photoselection"""
+        selection = self.excitation_combobox.get()
+        if self.dipole_source is None:
+            print("no dipole source")
+            return
+        if selection == 'x-dipole':
+            self.dipole_source.classical_photoselection((0, 0))
+        elif selection == 'y-dipole':
+            self.dipole_source.classical_photoselection((np.pi / 2, 0))
+        elif selection == 'z-dipole':
+            self.dipole_source.classical_photoselection((0, np.pi / 2))
+        elif selection == 'Unpolarised/rapidly tumbling':
+            # reset the photoselection
+            self.dipole_source.emission_scaling = np.ones_like(self.dipole_source.emission_scaling)
 
     def update_dipole_count(self, *args):
         try:
             self.dipole_count = int(self.dipole_count_tk_var.get())
+            self.set_dipole_source()
         except ValueError as e:
             print(e)
 
@@ -129,33 +216,18 @@ class SystemDesignerApp():
             self.dipole_source = DipoleSource()
             self.dipole_source.generate_dipole_ensemble(self.dipole_count)
 
-        # self.dipole_fig = self.dipole_source.plot_distribution(show_plot=False)
-        alphas, phis = self.dipole_source.alpha_d, self.dipole_source.phi_d, 
+        self.set_excitation()  # new dipole source is generated, need to set photoselection/excitation again
+        self.optical_system.source = self.dipole_source  # update source of optical system
+
+        # Draw 3D plot of dipole source
+        alphas, phis = self.dipole_source.alpha_d, self.dipole_source.phi_d,
         scaling = self.dipole_source.emission_scaling
-        self.dipole_fig = plot_dipole_source_3d(alphas, phis, scaling, show_plot=False)
+        self.dipole_fig = plot_dipole_source_3d(alphas, phis, scaling, show_plot=False, dipole_style='arrow')
+        self.dipole_fig.set_tight_layout(True)
         self.mpl_canvas.get_tk_widget().destroy()
         self.mpl_canvas = FigureCanvasTkAgg(self.dipole_fig, self.dipole_view_frame)
-        print(self.dipole_fig)
         self.mpl_canvas.draw()
         self.mpl_canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-    def init_element_config_bar(self):
-        self.element_list_and_config_container = tk.Frame(
-            self.root, width=320, highlightbackground="blue", highlightthickness=2)
-        self.element_list_and_config_container.pack(side=tk.LEFT, fill=tk.BOTH, padx=0, pady=0)
-        self.element_list_and_config_container.pack_propagate(False)  # Prevent the frame from resizing to fit child widgets
-
-        self.init_element_list_widget2(self.element_list_and_config_container)
-        self.init_add_element_widget(self.element_list_and_config_container)
-
-    def show_uncaught_error(self, *args):
-        err = traceback.format_exception(*args)
-        messagebox.showerror('Exception', err)
-        print(err)
-
-    def error_box(self, err):
-        messagebox.showerror("Error", err)
-        print(err)
 
     def init_optical_system(self):
         self.optical_system = OpticalSystem()
@@ -164,11 +236,16 @@ class SystemDesignerApp():
         classname = cls.__name__
         sig = signature(cls.__init__)
         hints = get_type_hints(cls.__init__)
+        # below is to handle typing.Optional[T] in the hints (primitives e.g. float are fine).
+        hints = dict([(key, get_args(hint)[0]) if len(get_args(hint)) != 0 else (key, hint)
+                      for key, hint in hints.items()])
+        print(hints)
         schema = []  # [{'element': classname}]
         for name, param in sig.parameters.items():
             if name == 'self':
                 continue
             default = param.default if param.default is not param.empty else None
+            print("hint get", hints.get(name, str))
             field = {
                 'name': name,
                 'type': type(default) if default is not None else hints.get(name, str),
@@ -190,8 +267,6 @@ class SystemDesignerApp():
             kw = var['arg_name']
             val = var['arg_var'].get()
             a_type = var['arg_type']
-            # print("type", a_type)
-            # print(a_type)
             if val == '':
                 continue
             options[kw] = (a_type)(val)
@@ -202,7 +277,7 @@ class SystemDesignerApp():
         except Exception as e:
             self.error_box(e)
             return
-        
+
         self.optical_system.elements.append(element)
         # Element number Label
         element_idx = len(self.element_list_widget.element_list_entries)
@@ -212,6 +287,7 @@ class SystemDesignerApp():
                                            width=300)
         self.element_list_widget.element_list_entries.append(element_entry_frame)
         element_entry_frame.pack()
+        self.update_element_diagram()
 
     def remove_element(self, idx):
         self.optical_system.elements.pop(idx)
@@ -224,6 +300,10 @@ class SystemDesignerApp():
             print(entry.element_idx)
             print(entry.name)
             print(self.optical_system.elements[n])
+        self.update_element_diagram()
+
+    def update_element_diagram(self):
+        self.system_diagram.draw_elements()
 
     def show_element_config(self, event):
         for widget in self.element_config_frame.winfo_children():
@@ -235,7 +315,8 @@ class SystemDesignerApp():
         title_val = tk.Label(self.element_config_frame, text="Value")
         title_arg.grid(column=0, row=0)
         title_val.grid(column=1, row=0)
-        saved_arg_vals = self.element_info[element_str]['current_arg_vals']  # get the last used values the user typed in
+        # get the last used values the user typed in
+        saved_arg_vals = self.element_info[element_str]['current_arg_vals']
         self.current_config_vars = []
         for n, arg in enumerate(args):
             arg_name = arg['name']
@@ -249,7 +330,7 @@ class SystemDesignerApp():
                 if arg_val is not None:
                     var.set(bool(arg_val))
                 # tk_arg.pack()
-                tk_arg.grid(column=0, row=n+1)
+                tk_arg.grid(column=0, row=(n + 1))
             else:
                 var = tk.StringVar()
                 tk_label = tk.Label(self.element_config_frame, text=f'{arg_name} ({arg_type.__name__})')
@@ -258,11 +339,10 @@ class SystemDesignerApp():
                     var.set(str(arg_val))
                 # tk_label.pack()
                 # tk_arg.pack(expand=True, fill=tk.X)
-                tk_label.grid(column=0, row=n+1)
-                tk_arg.grid(column=1, row=n+1)
+                tk_label.grid(column=0, row=(n + 1))
+                tk_arg.grid(column=1, row=(n + 1))
             self.current_config_vars.append({'arg_name': arg_name, 'arg_type': arg_type, 'arg_var': var})
             var.trace_add('write', self.update_element_options)  # add trace so values get updated in element_class_info
-        #self.add_element_button.grid(row=n+2)
 
     def init_menu_bar(self):
         self.menubar = tk.Menu()
@@ -277,51 +357,11 @@ class SystemDesignerApp():
     def donothing(self):
         pass
 
-    def init_element_list_widget2(self, parent_container):
+    def init_element_list_widget(self, parent_container):
         self.element_list_widget = ScrollableFrame(
             parent_container, width=300, highlightbackground="gray", highlightthickness=2)
 
-    def init_element_list_widget(self, parent_container):
-        # Create container, frame canvas that can scroll, and frame containing the list
-        self.element_list_container = tk.Frame(
-            parent_container, width=300, highlightbackground="gray", highlightthickness=2)
-        self.element_list_canvas = tk.Canvas(
-            self.element_list_container, width=280, highlightbackground="gray", highlightthickness=2)
-        self.element_list_scrollbar = tk.Scrollbar(self.element_list_container, width=20)
-        self.element_list_frame = tk.Frame(
-            self.element_list_canvas, width=280, highlightbackground="gray", highlightthickness=2)
-        element_list_title = tk.Label(self.element_list_container, text="Element list")
-        
-        self.element_list_container.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=0, pady=0)
-        element_list_title.pack(side=tk.TOP, fill=tk.X, expand=False)
-        self.element_list_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.element_list_canvas.pack_propagate(False)
-
-        # dont pack the list frame, use window instead to view it
-        self.element_list_scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, 0))
-        
-        self.element_list_scrollbar.config(command=self.element_list_canvas.yview)
-        self.element_list_canvas.configure(yscrollcommand=self.element_list_scrollbar.set)
-        
-        # Update the scroll region every time element is added/removed
-        self.element_list_frame.bind("<Configure>", self.update_list_bbox)
-
-        self.element_list_canvas.create_window(
-            (0, 0), window=self.element_list_frame, anchor="nw")
-
-        self.element_list_entries = []
-
-    def update_list_bbox(self, e):
-        self.element_list_canvas.configure(
-            scrollregion=self.element_list_canvas.bbox("all"))
-        print(self.element_list_canvas.bbox("all"))
-
     def init_add_element_widget(self, parent_continer):
-        # self.control_frame = tk.Frame(self.element_list_and_config_container,
-        #                               width=320, highlightbackground="red", highlightthickness=2)
-        # self.control_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=0, pady=10)
-        # self.control_frame.pack_propagate(False)  # Prevent the frame from resizing to fit child widgets
-
         self.element_widget_frame = tk.Frame(parent_continer, height=100,
                                              highlightbackground="gray", highlightthickness=2)
         self.element_widget_frame.pack(side=tk.BOTTOM, fill=tk.X, expand=False, padx=10, pady=10)
@@ -339,11 +379,8 @@ class SystemDesignerApp():
         self.add_element_button = tk.Button(self.element_widget_frame,
                                             text="Add",
                                             command=lambda: self.add_element())
-        # self.configure_element_button = tk.Button(self.element_widget_frame,
-        #                                           text="Configure")
         self.element_config_frame = tk.Frame(self.element_widget_frame,
                                              highlightbackground="gray", highlightthickness=2)
-        # self.configure_element_button.pack(side=tk.TOP, padx=5)
         self.element_config_frame.grid(column=0, row=1)  # pack()
         self.add_element_button.grid(column=0, row=2)  # pack(side=tk.BOTTOM, padx=5)
         self.show_element_config(tk.Event())
@@ -365,6 +402,15 @@ class SystemDesignerApp():
     def update_element_options(self, *args):
         element_str, options, options_str = self.get_current_element_args()
         self.element_info[element_str]['current_arg_vals'] = options
+
+    def show_uncaught_error(self, *args):
+        err = traceback.format_exception(*args)
+        messagebox.showerror('Exception', err)
+        print(err)
+
+    def error_box(self, err):
+        messagebox.showerror("Error", err)
+        print(err)
 
 def main():
     root = tk.Tk()

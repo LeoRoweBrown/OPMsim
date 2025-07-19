@@ -66,3 +66,34 @@ class ScrollableFrame(tk.Frame):
         self.element_list_canvas.configure(
             scrollregion=self.element_list_canvas.bbox("all"))
         print(self.element_list_canvas.bbox("all"))
+
+
+class PolarAngleEntryWidget(tk.Frame):
+    def __init__(self, container):
+        """
+        Reusable little widget for phi and alpha entry boxes. Not currently used
+        Args:
+            container (Tk.Frame): container frame
+
+        Returns:
+            tuple: polar_angle_frame,
+                (tk.Entry for alpha, tk.StringVar for alpha),
+                (tk.Entry for phi, tk.StringVar for phi)
+        """
+        # Frame containing the phi, alpha entry
+        polar_angle_frame = tk.Frame(container)
+        var_phi = tk.StringVar()
+        var_alpha = tk.StringVar()
+        label_phi = tk.Label(polar_angle_frame, text="phi")
+        label_phi.pack(side=tk.LEFT)
+        phi_entry = tk.Entry(
+            polar_angle_frame, textvariable=var_phi, width=7
+        )
+        phi_entry.pack(side=tk.LEFT)
+        label_alpha = tk.Label(polar_angle_frame, text="alpha")
+        label_alpha.pack(side=tk.LEFT)
+        alpha_entry = tk.Entry(
+            polar_angle_frame, textvariable=var_alpha, width=7
+        )
+        alpha_entry.pack(side=tk.LEFT)
+        return polar_angle_frame, (alpha_entry, var_alpha), (phi_entry, var_phi)

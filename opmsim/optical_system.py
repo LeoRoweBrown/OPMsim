@@ -1,4 +1,5 @@
-from typing import Sequence, List, Union, cast
+from typing import Sequence, List, Union, cast, Optional
+
 from warnings import warn
 import datetime
 import os
@@ -23,15 +24,17 @@ class OpticalSystem():
         """
         self.name = "default_optical_system"
         self.elements: List[Element] = list(elements)  # for mutability internally
-        self.source = source
+        self.source = deepcopy(source)  # make a copy so we can reuse the source, do we need deep or is shallow fine?
         self.NA = 1
         self.initial_half_angle = np.pi / 2  # entrance pupil half angle
-        self.ray_count = 7500  # should this be set in source instead?
-        self.preview_ray_count = 100
+        self.default_ray_count = 7500  # should this be set in source instead?
+        self.preview_ray_count = 50
         self.calculate_efield_sequentially = False
-        self.detector = None
+        self.detector: Optional[Detector] = None
         self.pupil_plot = None
         self.auto_orient_lenses = True
+        self.ray_generation_method = 'fibonacci'
+        self.debug_plots = False
 
         # current date for debug file
         date = datetime.datetime.now()
@@ -48,7 +51,13 @@ class OpticalSystem():
     def remove_element(self, idx=-1):
         self.elements.pop(idx)
 
-    def trace_system(self, compute_efield=True, plot_pupil=True, preview=False):
+    def get_detector(self):  # TODO replace with property
+        if self.detector is None:
+            raise RuntimeError("Detector not initialised")
+        else:
+            return self.detector
+
+    def trace_system(self, compute_efield=True, plot_pupil=True, preview=False, ray_count=None):
         """Call to trace rays: to calculate final ray k-vector and e-vector (if compute_efield is true)
 
         Args:
@@ -73,8 +82,13 @@ class OpticalSystem():
             self.update_element_positions()
 
         # Generates ray cone and draws it to first lens (by a distance = ffl)
-        ray_count = self.preview_ray_count if preview else self.ray_count
-        self.source.get_rays_uniform(half_angle, ffl, ray_count)
+        print("Plotting debug plots", self.debug_plots)
+        if ray_count is None:
+            ray_count = self.preview_ray_count if preview else self.default_ray_count
+        self.source.get_rays_uniform(half_angle, ffl, ray_count,
+                                     generation_method=self.ray_generation_method,
+                                     plot_sphere=self.debug_plots)
+
         rays: PolarRays = self.source.rays
 
         n_elements = len(self.elements)
@@ -93,6 +107,7 @@ class OpticalSystem():
                 subdir = subdir if element.label == "" else f"{subdir}_{element.label}"
                 fulldir = os.path.join(self.debug_dir, subdir)
                 rays.save_debug_data(fulldir, save_efield=self.calculate_efield_sequentially)
+        rays.remove_escaped_rays()  # also done in Detector # TODO, remove the one in Detector? reassess
 
         if preview:  # if doing ray preview, don't need to do any E-field calculation
             return
@@ -120,7 +135,6 @@ class OpticalSystem():
         """autoflip the lenses to be correct and get basis right"""
         flip = False
         n_lenses = 0
-        print("Orientations:")
         for i, element in enumerate(self.elements):
             # if basis changes,
             if i > 0 and element.use_previous_basis:
@@ -139,7 +153,6 @@ class OpticalSystem():
     def update_element_positions(self):
         current_coords = np.array([0, 0, 0])
         for i, element in enumerate(self.elements):
-            print("current coords", current_coords)
             optical_axis = element.basis[2, :]
             element.coords = current_coords + element.dz * optical_axis
             current_coords = element.coords + element.thickness * optical_axis

@@ -6,8 +6,7 @@ from .rays import PolarRays
 from .tools.misc import printif
 from . import matrices
 from opmsim.visualization.dipole_source_plots import plot_ray_sphere
-from opmsim.visualization.dipole_source_plots import plot_points_on_sphere
-from opmsim.visualization.dipole_source_plots_3d import plot_dipole_source_3d
+from opmsim.visualization.dipole_source_plots import plot_points_on_sphere, plot_dipole_source_3d
 
 class DipoleSource:
     """
@@ -15,11 +14,15 @@ class DipoleSource:
 
     """
 
-    def __init__(self, dipole_orientations=(()), name="default source", lda_exc=None, lda_em=None):
-        if lda_exc is None:
-            lda_exc = 500e-9  # should be a distribution at some point
-        if lda_em is None:
-            lda_em = 500e-9  # should be a distribution at some point
+    def __init__(self, dipole_orientations=(()), name="default source", lda_exc=500.e-9, lda_em=500.e-9):
+        """Constructor populates dipole source with dipoles passed by Nx2 array of dipole orientations
+
+        Args:
+            dipole_orientations (tuple, optional): Nx2 array of dipole orientations (phi_d, alpha_d). Defaults to (()).
+            name (str, optional): source label/name. Defaults to "default source".
+            lda_exc (float, optional): Excitation wavelength. Unused. Defaults to 500.e-9.
+            lda_em (float, optional): Emission wavelength. Defaults to 500.e-9.
+        """
 
         phi_alpha_pairs = np.array(dipole_orientations).reshape((-1, 2))  # -1 to infer length, 2D for phi, alpha
         phi_d_array = np.array(phi_alpha_pairs[:, 0])
@@ -67,8 +70,10 @@ class DipoleSource:
 
         rays.e_field = np.cross(n_x_p, n_vec)  # (N_rays, N_dipole, 3)
         rays.e_field = rays.e_field.reshape((n_dipoles, n_rays, 3, 1))  # e_fields are (3x1)
-        rays.E_pre = (np.e ** (1j * k * r) / r) * k**2  # replace with distribution of k (lambda_exc)
+        rays.e_field_pre = (np.e ** (1j * k * r) / r) * k**2  # replace with distribution of k (lambda_exc)
         self.emission_scaling = self.emission_scaling.reshape(n_dipoles, 1, 1, 1)
+        rays.emission_scaling = self.emission_scaling  # apply to rays object so calculate_intensity works
+        # TODO totally move this to rays, do not store in DipoleSource object?
 
         # Get initial energy calculations
         rays.calculate_intensity()
@@ -97,9 +102,8 @@ class DipoleSource:
         doesn't support beta, slow tumbling etc.
         """
 
-        phi_d, theta_d, areas = distribution_functions.uniform_points_on_sphere(
-            point_count=dipole_count, hemisphere=False
-        )
+        phi_d, theta_d, areas = distribution_functions.fibonacci_dipole_generation(
+            point_count=dipole_count)
         self.phi_d = np.append(self.phi_d, phi_d)
         self.alpha_d = np.append(self.alpha_d, np.pi / 2 - theta_d)
 
@@ -116,13 +120,19 @@ class DipoleSource:
     def depolarise(self, correlation_time, fluorescence_lifetime, timepoints=100):
         raise NotImplementedError()
 
-    def plot_distribution(self, alphas=[], show_plot=True):
+    def plot_distribution(self, alphas=[], show_plot=True, plot_3d=False):
         """Plot dipole distribution on sphere and return mpl figure"""
-        return plot_points_on_sphere(
-            self.alpha_d, self.phi_d, self.emission_scaling, show_plot=show_plot)
+        if plot_3d:
+            return plot_dipole_source_3d(
+                self.alpha_d, self.phi_d, alphas=self.emission_scaling,
+                directional_arrow=self.excitation_polarisation,
+                show_plot=True, dipole_style='arrow')
+        else:
+            return plot_points_on_sphere(
+                self.alpha_d, self.phi_d, self.emission_scaling, style='arrow', show_plot=show_plot)
         # raise NotImplementedError("Moved to visualization package!")
 
-    def classical_photoselection(self, excitation_polarisation, plot=True):
+    def classical_photoselection(self, excitation_polarisation, plot=False):
         """Scale the intensity from dipoles based on their orientation and the
         excitation polarisation"""
 
@@ -138,7 +148,6 @@ class DipoleSource:
 
         phi_d = self.phi_d
         alpha_d = self.alpha_d
-        # TODO: double check this after changing x to y etc.
         cos_d_exc = (
             np.cos(alpha_exc) * np.cos(phi_exc) * np.cos(alpha_d) * np.cos(phi_d)
             + np.cos(alpha_exc) * np.sin(phi_exc) * np.cos(alpha_d) * np.sin(phi_d)
@@ -150,26 +159,23 @@ class DipoleSource:
             alphas = self.emission_scaling
             self.plot_distribution(alphas)
 
-    def plot_ray_sphere2(self, phi, theta, plot_histo=False):        
-        warnings.warn("Moved plot_ray_sphere to visualization.dipole_source_plots", DeprecationWarning)
-
     def display_pupil_rays(self):
         warnings.warn("Moved display_pupil_rays to visualization.dipole_source_plots", DeprecationWarning)
 
     def get_rays_uniform(
             self, max_half_angle, f,
-            ray_count=5000, plot_sphere=True, ray_dist="uniform",
+            ray_count=5000, plot_sphere=False, generation_method="fibonacci",
             ring_method="uniform_phi_inbetween"):
         """Get equal area elements in rings for uniform rays, also compute their area"""
-
-        if ray_dist == "uniform":
+        print("Generating rays")
+        if generation_method == "rings":
             phi_k, theta_k, areas = distribution_functions.uniform_points_on_sphere(
                 max_half_angle, ray_count, ring_method)
-        elif ray_dist == "fibonacci":
-            phi_k, theta_k, areas = distribution_functions.fibonacci_sphere_rays(
+        elif generation_method == "fibonacci":
+            phi_k, theta_k, areas = distribution_functions.fibonacci_ray_generation(
                 max_half_angle, ray_count)
         else:
-            raise Exception(f"Invalid ray distribution method '{ray_dist}'")
+            raise Exception(f"Invalid ray distribution method '{generation_method}'")
         if plot_sphere:
             plot_ray_sphere(phi_k, theta_k)
 
@@ -208,7 +214,7 @@ class DipoleSource:
         print(self.emission_scaling.shape)
         rays.total_intensity_initial = np.sum(rays.e_field * rays.e_field * self.emission_scaling, axis=0)
         # energy per dipole
-        rays.calculate_intensity(self.emission_scaling)
+        rays.calculate_intensity()
 
         self.rays = rays
 

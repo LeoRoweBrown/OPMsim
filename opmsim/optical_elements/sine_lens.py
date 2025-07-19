@@ -1,4 +1,5 @@
 import warnings
+from typing import Union
 from matplotlib import pyplot as plt
 import numpy as np
 from .base_element import Element
@@ -18,8 +19,10 @@ class SineLens(Element):
 
     def __init__(
             self, NA: float, focal_length: float, dz=0,
-            front_focal_length=None, back_focal_length=None, n=1,
-            y_axis_rotation=0, D=None, trace_after=True,
+            front_focal_length: Union[float, None] = None,
+            back_focal_length: Union[float, None] = None,
+            n: float = 1.0,
+            y_axis_rotation: float = 0, D: Union[float, None] = None, trace_after=True,
             flipped_orientation=False,
             label=''):
         super().__init__(
@@ -35,7 +38,7 @@ class SineLens(Element):
             self.back_focal_length = focal_length
 
         self.NA = NA  # we use effective NA (as if lens were in air)
-        self.sine_theta = NA / n
+        self.sine_theta_half_angle = NA / n
         self.n = n  # object size
         self.y_axis_rotation = y_axis_rotation  # when there is relative tilt between objectives i.e. OPM
         self.flipped_orientation = flipped_orientation
@@ -67,10 +70,10 @@ class SineLens(Element):
 
         # Then refract according to lens orientation/whether rays are collimated or not
         if self.flipped_orientation:
-            print("Lens is flipped")
+            # print("Lens is flipped")  # TODO add logging
             self.focus_collimated_rays(rays)
         else:
-            print("Lens isn't flipped")
+            # print("Lens isn't flipped")
             self.collimate_rays(rays)
 
     def focus_collimated_rays(self, rays):
@@ -98,7 +101,6 @@ class SineLens(Element):
 
         # Propagate to curved surface from flat surface
         distance_to_plane = self.front_focal_length * (1 - np.cos(lens_theta))
-        print("distance shape", distance_to_plane.shape)
         rays.propagate(distance_to_plane)
 
         old_theta = rays.theta
@@ -159,7 +161,7 @@ class SineLens(Element):
 
         # reject by angle not sine of angle -- avoids wrap-around issue hopefully?
         # TODO remove this, rho rejection should manage this
-        escape_mask_na = abs(rays.theta) > np.arcsin(self.sine_theta)
+        escape_mask_na = abs(rays.theta) > np.arcsin(self.sine_theta_half_angle)
         rays.escaped = np.logical_or(escape_mask_na, rays.escaped)
         if any(escape_mask_na):
             print(np.sum(escape_mask_na), "rays escaped from NA mask")
@@ -183,7 +185,6 @@ class SineLens(Element):
         rays.k_vec = lens_matrix @ rays.k_vec  # update k-vector
 
         distance_to_plane = self.front_focal_length * (1 - np.cos(lens_theta))
-        print("distance shape", distance_to_plane.shape)
         rays.propagate(distance_to_plane)  # trace to flat surface
 
     def trace_f(self, rays: PolarRays):

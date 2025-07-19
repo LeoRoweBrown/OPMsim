@@ -13,7 +13,9 @@ def draw_sine_lens(ax: axes.Axes, sine_lens: SineLens, view='xz', color='k'):
     it is a spherical caps and a plane"""
     x, y, z = sine_lens.coords
     max_sine_theta = (sine_lens.NA / sine_lens.n)
-    sine_thetas = np.linspace(-max_sine_theta, max_sine_theta, 50)
+    max_theta = np.arcsin(max_sine_theta)
+    thetas = np.linspace(-max_theta, max_theta, 50)
+    sine_thetas = thetas  # np.linspace(-max_sine_theta, max_sine_theta, 50) -- replaced because not uniform
     phis = np.linspace(0, 2 * np.pi, 50)
     r = sine_lens.front_focal_length
 
@@ -53,8 +55,9 @@ def draw_sine_lens(ax: axes.Axes, sine_lens: SineLens, view='xz', color='k'):
     flat_surface = sine_lens.basis @ rotate_y(rot_y) @ flat_surface
     print("Curved surface shape", curved_surface.shape)
 
-    ax.plot(curved_surface[2, :] + z, curved_surface[0, :] + x, color=color)
-    ax.plot(flat_surface[2, :] + z, flat_surface[0, :] + x, color=color)
+    plot_c = ax.plot(curved_surface[2, :] + z, curved_surface[0, :] + x, color=color)
+    plot_f = ax.plot(flat_surface[2, :] + z, flat_surface[0, :] + x, color=color)
+    return plot_c + plot_f  # plot returns list, so add to concat
 
 def draw_line_element(ax: axes.Axes, element: Element, pupil_radius, rot_y=0, view='xz', color='k'):
     x, y, z = element.coords
@@ -66,4 +69,5 @@ def draw_line_element(ax: axes.Axes, element: Element, pupil_radius, rot_y=0, vi
         surface_y,
         surface_z])
     surface = element.basis @ rotate_y(rot_y) @ surface
-    ax.plot(surface[2, :] + z, surface[0, :] + x, color=color)
+    plot_f = ax.plot(surface[2, :] + z, surface[0, :] + x, color=color)
+    return plot_f
