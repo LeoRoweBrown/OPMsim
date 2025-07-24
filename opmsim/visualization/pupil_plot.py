@@ -18,7 +18,7 @@ def plot_pupil_intensity(
 
     if len(x) < 4:
         print("Not enough points to plot pupil, skipping")
-        return
+        return plt.figure()
 
     data_total = data_x + data_y
 
@@ -50,21 +50,21 @@ def plot_pupil_intensity(
     fig = plt.figure(figsize=figsize)
     fig.text(0.5, -0.05, caption_text, ha="center", fontsize=13)
 
-    ax = fig.add_subplot(1, n_plots, 1)
-    _add_heatmap_plot(fig, ax, x, y, data_x, pupil_radius=max_r,
+    fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=n_plots, layout='tight')
+    _add_heatmap_plot(fig, ax1, x, y, data_x, pupil_radius=max_r,
                       min_range=min_range, max_range=max_range, title="X intensity")
 
-    ax = fig.add_subplot(1, n_plots, 2)
-    _add_heatmap_plot(fig, ax, x, y, data_y, pupil_radius=max_r,
+    _add_heatmap_plot(fig, ax2, x, y, data_y, pupil_radius=max_r,
                       min_range=min_range, max_range=max_range, title="Y intensity")
 
-    ax = fig.add_subplot(1, n_plots, 3)
-    _add_heatmap_plot(fig, ax, x, y, data_total, pupil_radius=max_r,
+    _add_heatmap_plot(fig, ax3, x, y, data_total, pupil_radius=max_r,
                       min_range=min_range, max_range=max_range, title="Total intensity")
 
     fig.suptitle(title, wrap=True, fontweight='bold')
-    fig.set_layout_engine('tight')
-    plt.show()
+    try:  # better to do a version check
+        fig.set_layout_engine('tight')
+    except AttributeError as e:
+        plt.tight_layout()
 
     return fig
 
@@ -99,7 +99,7 @@ def _add_heatmap_plot(fig, ax, x, y, data, pupil_radius=None,
     pc1 = ax.tricontourf(x, y, data, title="", cmap=cmap, levels=levels,
                          vmin=min_range, vmax=max_range, extend='both')
 
-    plt.plot(r_line * np.cos(phi_line), r_line * np.sin(phi_line), color="k", zorder=2, clip_on=False)
+    plt.plot(ax, r_line * np.cos(phi_line), r_line * np.sin(phi_line), color="k", zorder=2, clip_on=False)
     ax.set_aspect('equal')
     ax.axis('off')
     ax.set_title(title)

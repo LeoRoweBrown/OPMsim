@@ -15,7 +15,7 @@ def draw_sine_lens(ax: axes.Axes, sine_lens: SineLens, view='xz', color='k'):
     max_sine_theta = (sine_lens.NA / sine_lens.n)
     max_theta = np.arcsin(max_sine_theta)
     thetas = np.linspace(-max_theta, max_theta, 50)
-    sine_thetas = thetas  # np.linspace(-max_sine_theta, max_sine_theta, 50) -- replaced because not uniform
+    sine_thetas = np.sin(thetas)  # np.linspace(-max_sine_theta, max_sine_theta, 50) -- replaced because not uniform
     phis = np.linspace(0, 2 * np.pi, 50)
     r = sine_lens.front_focal_length
 

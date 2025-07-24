@@ -86,7 +86,7 @@ class SystemDesignerApp():
             self.sim_control_frame, text='Preview ray-tracing', command=self.preview_raytrace)
         self.preview_rays_button.pack(side=tk.LEFT)
         self.calculate_efields_button = tk.Button(
-            self.sim_control_frame, text='Run simulation', command=self.preview_raytrace)
+            self.sim_control_frame, text='Run simulation', command=self.run_simulation)
         self.calculate_efields_button.pack(side=tk.LEFT)
 
     def init_source_config_bar(self):
@@ -175,6 +175,9 @@ class SystemDesignerApp():
         self.diagram_mpl_canvas = FigureCanvasTkAgg(self.system_diagram_fig, self.ray_diagram_frame)
         self.diagram_mpl_canvas.draw()
         self.diagram_mpl_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    def run_simulation(self, *args):
+        self.optical_system.trace_system()
 
     def set_excitation(self, *args):
         """Called by set_dipole to set photoselection"""

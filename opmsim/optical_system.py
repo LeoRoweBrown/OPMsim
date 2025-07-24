@@ -85,13 +85,15 @@ class OpticalSystem():
         print("Plotting debug plots", self.debug_plots)
         if ray_count is None:
             ray_count = self.preview_ray_count if preview else self.default_ray_count
-        self.source.get_rays_uniform(half_angle, ffl, ray_count,
-                                     generation_method=self.ray_generation_method,
-                                     plot_sphere=self.debug_plots)
+        self.source.generate_rays(half_angle, ffl, ray_count,
+                                  generation_method=self.ray_generation_method,
+                                  plot_sphere=self.debug_plots)
 
         rays: PolarRays = self.source.rays
-
         n_elements = len(self.elements)
+
+        # calculate energy emitted into 2pi steradians for efficiency calculations
+        rays.total_power_initial_hemisphere = self.source.calculate_half_sphere_energy(ffl, ray_count)
 
         print(f"Element list: {self.elements} ({n_elements} elements)")
 
@@ -125,8 +127,13 @@ class OpticalSystem():
         self.detector = Detector(self.is_exit_pupil_wavefront_flat())
         self.detector.detect_rays(rays)
 
+        # calculate efficiency
+
         if plot_pupil:
-            self.pupil_plot = self.detector.plot_exit_pupil()
+            pupil_plot = self.detector.plot_exit_pupil()
+            if pupil_plot is not None:
+                pupil_plot.show()
+            self.pupil_plot = pupil_plot
 
     def preview_rays(self):
         self.trace_system(compute_efield=False)

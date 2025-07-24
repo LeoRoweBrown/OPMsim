@@ -51,7 +51,7 @@ class PolarRays:
         self.rho = np.zeros_like(phi_array)  # cylindrical coordinate rho, radial distance of ray from optical axis
         self.rho_before_trace = None  # used to store the rho before tracing, sometimes useful
         self.initial_path_length = initial_path_length  # for calculating initial phase, TODO: not used maybe remove
-        
+
         # NOTE: pos and pos_global are temp variables, while path_coords/path_coords_local stores each position in full
         self.pos = np.zeros((len(phi_array), 3, 1))  # position of ray in Cartesian coords in current basis
         # current position of ray in Cartesian coords in original basis (n_rays, 3, 1), 1 for broadcasting
@@ -59,15 +59,19 @@ class PolarRays:
         self.path_coords = np.zeros((len(phi_array), 3, 1))  # (global basis) coords for ray path (n_rays, 3, n_coords)
         self.path_coords_local = np.zeros((len(phi_array), 3, 1))  # local basis version of path_coords
 
-        self.total_intensity_initial = np.zeros_like(self.e_field)
+        self.total_power = np.zeros_like(self.e_field)
+        self.total_power_initial = np.zeros_like(self.e_field)
+        self.total_power_initial_hemisphere = np.zeros_like(
+            self.e_field
+        )  # energy emitted into hemisphere (independent of ray angles)
 
         self.optical_axis = 0  # todo: make 3 element vector
         self.is_meridional = False
-        self.escaped = [False] * self.n  # mask used to indicate rays that are lost
+        self.escaped = np.array([False] * self.n)  # mask used to indicate rays that are lost
 
         if area_elements is None:
             area_elements = np.ones(self.n)  # TODO place with area calculation of cap
-        self.areas = area_elements  # area elements dA assoicated with each ray that build up the spherical surface
+        self.areas = area_elements  # area elements dA associated with each ray that build up the spherical surface
         self.area_scaling = np.ones(self.n)  # for scaling energy when flat and curved wavefronts
         self.emission_scaling = np.ones(1)
 
@@ -76,13 +80,7 @@ class PolarRays:
         self.negative_kz = False  # e.g., if ray is reflected back by mirror
         self.ray_density = self.n / np.sum(area_elements)  # so values dont change with ray number
 
-        # Collection efficiency metrics
-        self.emission_efficiency = 1  # EE
-        self.half_sphere_energy = 1  # energy emitted by source in 2pi steradians, TODO: move to dipole source instead?
-        self.average_energy_times_NA = 1  # half_sphere_energy scaled by actual collection angle
-
         self.keep_history = keep_history  # actually overriden by trace_rays which decides this..
-
         self.ray_history = []
 
     def verify_dot_product(self):
@@ -101,13 +99,12 @@ class PolarRays:
     def update_history(self, label=None):
         """
         Make a copy of the rays object and store in history: very RAM inefficient.
-        Todo: either remove or make the history save to disk
+        TODO: either remove or make the history save to disk
         """
         self.label = label
         if self.keep_history:
             warnings.warn("Update history being reimplemented to save to disk!")
         else:
-            # no reason to really have this option
             print("History has been disabled, rays not saved!")
 
     def propagate(self, path_distance):
@@ -125,7 +122,6 @@ class PolarRays:
         self.pos_global += (inverse_basis @ self.k_vec) * path_distance
         self.path_coords = np.append(self.path_coords, (self.pos_global), axis=2)
         self.path_coords_local = np.append(self.path_coords_local, (self.pos), axis=2)
-        # self.pos_global += (self.basis @ self.k_vec) * path_distance
 
     def change_basis(self, basis: np.ndarray, calculate_efield=False):
         """
@@ -149,6 +145,10 @@ class PolarRays:
         self.update_polar_angles()
 
     def update_polar_angles(self):
+        """
+        Use current k_vec to calculate theta and phi. k_vec is updated directly during tracing 
+        with matrices, but not necessarily theta and phi
+        """
         self.theta = np.arccos(self.k_vec[:, 2]).flatten()
         self.phi = np.arctan2(self.k_vec[:, 1], self.k_vec[:, 0]).flatten()
 
@@ -168,16 +168,14 @@ class PolarRays:
         intensity_per_dipole = np.sum(self.intensity_per_dipole_vector, axis=1)
         total_intensity = np.sum(intensity_per_dipole)
         # I tried scaling by "ray density" so the answers are independent
-        # of ray sampling, but ray number/solid angle appears to vary slightly
-        # so this is disabled for now
+        # of ray sampling, if normalized total intensity isn't used this to to be removed
         if scale_by_density:
             ray_density = self.ray_density
         else:
             ray_density = 1
         self.intensity_vector = intensity_vector
-        # total_intensity_normalized
         self.total_intensity_normalized = total_intensity / ray_density
-        self.total_power = intensity_per_dipole * self.areas  # getting the SI units right
+        self.total_power = intensity_per_dipole * self.areas  # getting the SI units right with area
 
     def remove_escaped_rays(self, escaped=None):
         """
@@ -202,6 +200,7 @@ class PolarRays:
         self.pos_global = self.pos_global[not_escaped]
         self.path_coords = self.path_coords[not_escaped, :, :]
         self.path_coords_local = self.path_coords_local[not_escaped, :, :]
+        self.escaped = self.escaped[not_escaped]
 
     def set_zero_escaped_rays(self, escaped=None):
         if escaped is None:

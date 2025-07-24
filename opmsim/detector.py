@@ -1,6 +1,6 @@
 import numpy as np
 from .tools import graphics
-from .visualization import pupil_plot
+from .visualization.pupil_plot import plot_pupil_intensity
 from .rays import PolarRays
 
 
@@ -88,7 +88,7 @@ class Detector:
 
     def plot_exit_pupil(self):
         try:
-            return pupil_plot.plot_pupil_intensity(
+            return plot_pupil_intensity(
                 x=self.x, y=self.y, data_x=self.Ix_area_scaled, data_y=self.Iy_area_scaled)
         except ValueError:
             print("Failed to plot pupil, data are:")

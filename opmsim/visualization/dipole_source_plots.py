@@ -6,8 +6,9 @@ from numpy.typing import ArrayLike
 def plot_dipole_source_3d(alpha, phi, alphas=(),
                           directional_arrow=None,
                           show_plot=True, dipole_style='arrow'):
-    """Dipole 3d scatter to show orientations, pyplot version
-        TODO: remove this and replace with dipole_plot_for_gui_pyplot version
+    """
+    Dipole 3d scatter to show orientations, pyplot version
+    TODO: remove this and replace with dipole_plot_for_gui_pyplot version?
     Args:
         alpha (ndarray): alpha_d angles, polar angle from z axis
         phi (ndarray): phi_d azimuthal angles, measured from x axis
