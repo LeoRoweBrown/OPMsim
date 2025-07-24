@@ -99,7 +99,7 @@ def _add_heatmap_plot(fig, ax, x, y, data, pupil_radius=None,
     pc1 = ax.tricontourf(x, y, data, title="", cmap=cmap, levels=levels,
                          vmin=min_range, vmax=max_range, extend='both')
 
-    plt.plot(ax, r_line * np.cos(phi_line), r_line * np.sin(phi_line), color="k", zorder=2, clip_on=False)
+    ax.plot(r_line * np.cos(phi_line), r_line * np.sin(phi_line), color="k", zorder=2, clip_on=False)
     ax.set_aspect('equal')
     ax.axis('off')
     ax.set_title(title)
