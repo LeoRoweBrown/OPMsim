@@ -121,7 +121,12 @@ class SineLens(Element):
         if self.trace_after:
             rays.propagate(self.front_focal_length)
 
+        # this is demonstrably correct for the ring method of ray generation, but
+        # less so for fibonacci. there is surely a symmetry argument here though? dA is conserved.
         rays.area_scaling *= np.abs(np.cos(new_theta) / np.cos(old_theta))
+
+        # TODO: look into using this scaling which considers curvature e.g.:
+        # area_cap_method = 2 * np.pi * (np.cos(thetas[i]) - np.cos(thetas[i + 1])) / n_cells_fitting[i + 1]
 
     def collimate_rays(self, rays):
         """

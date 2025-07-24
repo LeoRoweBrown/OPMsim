@@ -17,9 +17,13 @@ from opmsim.optical_elements.flat_mirror import FlatMirror, ProtectedFlatMirror,
 from opmsim.gui.tk_widgets import ElementFrame, ScrollableFrame
 from opmsim.visualization.dipole_plot_for_gui import plot_dipole_source_3d
 from opmsim.visualization.optical_system_diagram import OpticalSystemDiagram
-# from opmsim.visualization.ray_tracing_plots import
 
 class SystemDesignerApp():
+    """
+    Tkinter app to design a optical system with opmsim tools, visualize the ray tracing, and
+    and show the final intensity distribution in the exit pupil.
+    TODO: In need of more documentation/docstrings
+    """
     def __init__(self, root) -> None:
         self.root = root
         self.width = 1280
@@ -69,7 +73,6 @@ class SystemDesignerApp():
         self.diagram_mpl_canvas = FigureCanvasTkAgg(self.system_diagram_fig, self.ray_diagram_frame)
         self.diagram_mpl_canvas.draw()
         self.diagram_mpl_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        # self.mpl_canvas.get_tk_widget().pack_propagate(True)
 
         # Init the system object and diagram (empty, no elements or source)
         self.optical_system = OpticalSystem()
@@ -265,18 +268,18 @@ class SystemDesignerApp():
         # get options
         options = {}
         options_str = ''
-        # var is the StringVar BooleanVar from tkinter
+        # var is the StringVar or BooleanVar from tkinter, i.e. the value set in the GUI
         for n, var in enumerate(self.current_config_vars):
             kw = var['arg_name']
             val = var['arg_var'].get()
-            a_type = var['arg_type']
+            a_type = var['arg_type']  # if val is empty, don't add to the keywords
             if val == '':
                 continue
             options[kw] = (a_type)(val)
             options_str += f'{kw}: {val}, '
 
         try:
-            element = Element(**options)
+            element = Element(**options)  # keywords passed to instantiation of Element (e.g. SineLens)
         except Exception as e:
             self.error_box(e)
             return

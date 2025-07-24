@@ -1,5 +1,6 @@
 """
-Class representing bundle of rays, with a 2D matrices for k-vector and E-vectors
+Class representing bundle of rays, with a 2D matrices for k-vector and 3D E-vectors,
+since E-field from each dipole is considered.
 """
 import os
 from copy import deepcopy
@@ -19,11 +20,11 @@ class PolarRays:
             area_elements=None, lda=500e-9, keep_history=True):
         """
         Args:
-            phi_array (np.ndarray): array of ray azimuthal angle (measured from x)
-            theta_array (np.ndarray): array of ray polar angle (measured from z)
-            initial_path_length (np.ndarray): initial ray path length.
+            phi_array (numpy.ndarray): array of ray azimuthal angle (measured from x)
+            theta_array (numpy.ndarray): array of ray polar angle (measured from z)
+            initial_path_length (numpy.ndarray): initial ray path length.
                 Equals focal distance for curved principal surface
-            area_elements (np.ndarray, optional): area element associated with each ray when generated in sphere.
+            area_elements (numpy.ndarray, optional): area element associated with each ray when generated in sphere.
                 Defaults to None, and areas are caluclated based on cap area divided by ray count
             lda (float, optional): wavelength (lda is short for lambda). Defaults to 500e-9.
             keep_history (bool, optional): save the state of the object if True. Defaults to True.
@@ -146,7 +147,7 @@ class PolarRays:
 
     def update_polar_angles(self):
         """
-        Use current k_vec to calculate theta and phi. k_vec is updated directly during tracing 
+        Use current k_vec to calculate theta and phi. k_vec is updated directly during tracing
         with matrices, but not necessarily theta and phi
         """
         self.theta = np.arccos(self.k_vec[:, 2]).flatten()

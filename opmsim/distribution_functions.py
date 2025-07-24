@@ -1,9 +1,12 @@
+"""
+Set of functions for generating ditsributions of dipoles and rays.
+Includes a Monte Carlo method, Fibonacci spiral method, and concentric ring method
+"""
+
 from time import time
 from warnings import warn
 import numpy as np
 from matplotlib import pyplot as plt
-from . import matrices
-import math
 
 MIN_FIBONACCI_SAMPLES_SPHERE = 10
 
@@ -37,7 +40,6 @@ def uniform_mc_sampler(pdf, input_range, N, maxiter=10000, plot=True):
         plt.ylabel("Normalised frequency")
     return np.array(accepted_points)
 
-
 def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
                              point_count=5000,
                              method="rings_phi_inbetween",
@@ -45,8 +47,16 @@ def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
     """
     Get equal area elements in rings for uniform rays, also compute their area.
     Legacy method that I used to check anisotropy is correct and is symmetric.
-    Looks like Fibonacci method has radially asymmetric residuals between theory and sim anisotropy
+    Dev NOTE: Fibonacci method seems to have radially asymmetric residuals between theory and sim anisotropy
 
+    Args:
+        max_half_angle (tuple, optional): Max ray half angle i.e. asin(NA/n). Defaults to (np.pi / 2).
+        point_count (int, optional): Number of points to generate in 2pi steradians. Defaults to 5000.
+        method (str, optional): Method to populate ray points within rings. Defaults to "rings_phi_inbetween".
+        hemisphere (bool, optional): If true populate a full hemisphere (was used for dipole gen). Defaults to True.
+
+    Returns:
+        (numpy.ndarray, numpy.ndarray, numpy.ndarray): (phi_k, theta_k, areas_usingcaps)
     """
 
     if hemisphere:
@@ -148,7 +158,7 @@ def uniform_points_on_sphere(max_half_angle=(np.pi / 2),
 
 def fibonacci_dipole_generation(point_count=1000):
     """
-    Generate uniform spherical dist of dipoles using Fibonacci sphere method. 
+    Generate uniform spherical dist of dipoles using Fibonacci sphere method.
 
     Args:
         point_count (int, optional): Number of points to generate. Defaults to 1000.
@@ -157,7 +167,7 @@ def fibonacci_dipole_generation(point_count=1000):
         ValueError: If point count is too low for reasonable distribution (MIN_FIBONACCI_SAMPLES_SPHERE)
 
     Returns:
-        tuple: phi, theta, areas: Azimuth, polar angles and the area of each element
+        (numpy.ndarray, numpy.ndarray, numpy.ndarray): Azimuth, polar angles and the area of each element
     """
     if point_count < MIN_FIBONACCI_SAMPLES_SPHERE:  # reasonable limitation
         raise ValueError(f"At least {MIN_FIBONACCI_SAMPLES_SPHERE} dipoles required for Fibonacci ensemble")
@@ -169,11 +179,11 @@ def fibonacci_ray_generation(max_half_angle=(np.pi / 2), point_count=1000):
 
     Args:
         max_half_angle (tuple, optional): max half polar angle of sphere pi/2 -> hemisphere. Defaults to (np.pi / 2)
-        point_count (int, optional): Number of points to generate. Defaults to 1000.
+        point_count (int, optional): Number of points to generate in 2pi steradians. Defaults to 1000.
         show_plot (bool, optional): _description_. Defaults to False.
 
     Returns:
-        tuple: phi, theta, areas: Azimuth, polar angles and the area of each element
+        (numpy.ndarray, numpy.ndarray, numpy.ndarray): Azimuth, polar angles and the area of each element
 
     """
     phi, theta, areas = fibonacci_sphere(max_half_angle, point_count * 2, full_sphere=False)
@@ -201,7 +211,7 @@ def fibonacci_sphere(max_half_angle,
         show_plot (bool, optional): _description_. Defaults to False.
 
     Returns:
-        tuple: (phi_k, theta_k, areas)
+        (numpy.ndarray, numpy.ndarray, numpy.ndarray): (phi_k, theta_k, areas)
     """
     points = np.zeros((point_count, 3))
     phi = np.pi * (np.sqrt(5.0) - 1.0)  # golden angle in radians
