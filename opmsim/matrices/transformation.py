@@ -5,6 +5,7 @@ matrices representing coordinate transforms during raytracing
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from typing import List, Union
+from .optical_matrices import refraction_meridional_tensor
 
 
 def meridional_transform(phi, inverse=False):
@@ -42,7 +43,7 @@ def arbitrary_rotation(theta, ux, uy, uz):
     :param uz:
     :return:
     """
-    # TODO fix implementation with for loop, the safest way
+    # TODO fix implementation with for loop, the safest way. not currently used though.
     raise NotImplementedError
     cos_t = np.cos(theta)
     sin_t = np.sin(theta)
@@ -61,11 +62,12 @@ def local_wavefront_to_lab_basis(phi: ArrayLike, theta: ArrayLike) -> np.ndarray
     """
     Inverse version of lab_to_local_wavefront_basis.
 
-    :param float | ndarray phi: azimuthal angle of ray(s)
-    :param float | ndarray theta: polar angle of rays(s)
-    :param bool inverse: if True, transforms local wavefront coordinates (Iz=0) to lab coordinates
-    :return: transformation matrix
-    :rtype np.ndarray
+    Args:
+        phi (ArrayLike): azimuthal (phi) ray angle
+        theta (ArrayLike): polar (theta) ray angle
+
+    Returns:
+        np.ndarray: transformation matrix to express e-field/k-vector in lab coords (going from local wavefront)
     """
     return lab_to_local_wavefront_basis(phi, theta, inverse=True)
 
@@ -73,38 +75,26 @@ def lab_to_local_wavefront_basis(phi: ArrayLike, theta: ArrayLike, inverse=False
     """
     Used to calculate electrics fields evaluated on a curved wavefront, e.g. in detection stage
     changes coordinate system according to k vector so that Iz = 0
-    both rotates into meridional and then does theta rotation
+    effectively applies meridional transform and refraction to basis, and takes inverse for intrinsic rotation
 
     Args:
-        phi (ArrayLike): azimuthal angle of ray(s)
-        theta (ArrayLike): polar angle of rays(s)
-        inverse (bool, optional): if True, transforms local wavefront coordinates (Iz=0) to lab coordinates.
-            Defaults to False.
-
-    Raises:
-        Exception: if phi and theta are not equal in length
-        Exception: if matrix inversion fails (np.linalg.LinAlgError)
+        phi (ArrayLike): azimuthal (phi) ray angle
+        theta (ArrayLike): polar (theta) ray angle
+        inverse (bool, optional): If True, go from curved local basis to flat lab basis. Defaults to False.
 
     Returns:
-        np.ndarray: tensor for rotating into a basis local to (phi, theta) points so Iz = 0
+        np.ndarray: transformation matrix to express e-field/k-vector on a curved surface coord system
     """
-    phi = np.atleast_1d(phi)
-    theta = np.atleast_1d(theta)
-    if len(phi) != len(theta):
-        raise Exception(f"length of phi and theta arrays not equal ({len(phi)} and {len(theta)})")
-    rotate_tensor = np.zeros((len(phi), 3, 3))
-    for n in range(len(phi)):
-        rotate_matrix = np.array([
-            [np.cos(phi) * np.cos(theta), np.sin(phi) * np.cos(theta), -np.sin(theta)],
-            [-np.sin(phi), np.cos(phi), np.zeros_like(phi)],
-            [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)]
-        ]).reshape((len(phi), 3, 3))
-        if inverse:
-            try:
-                rotate_matrix = np.linalg.inv(rotate_matrix)
-            except np.linalg.LinAlgError as e:
-                raise Exception("Failed to invert local lab rotation matrix") from e
-        rotate_tensor[n, :, :] = rotate_matrix
+
+    # The logic of this is that the matrices performing a refraction i.e. mapping curved wavefront
+    # onto a flat wavefront is equivalent to measuring the field on the curved wavefront.
+    # Therefore apply matrices for refraction to basis, and take inverse of result for an intrinsic rotation
+    # (rotating the basis by a (Euler) angle, theta, is equivalent to rotating the vector by -theta)
+
+    theta = np.atleast_1d(theta) if not inverse else -np.atleast_1d(theta)
+    rotate_tensor = meridional_transform(phi, inverse=True) @ \
+        refraction_meridional_tensor(-theta) @ meridional_transform(phi)
+
     return rotate_tensor
 
 def ps_projection_matrix(p, s, k_vec, inverse=False):

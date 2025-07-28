@@ -125,9 +125,6 @@ class SineLens(Element):
         # less so for fibonacci. there is surely a symmetry argument here though? dA is conserved.
         rays.area_scaling *= np.abs(np.cos(new_theta) / np.cos(old_theta))
 
-        # TODO: look into using this scaling which considers curvature e.g.:
-        # area_cap_method = 2 * np.pi * (np.cos(thetas[i]) - np.cos(thetas[i + 1])) / n_cells_fitting[i + 1]
-
     def collimate_rays(self, rays):
         """
         E.g., when rays originate from a point such as with a infinity-corrected primary objective
@@ -135,16 +132,11 @@ class SineLens(Element):
         Args:
             rays (np.ndarray): the N x 3 PolarRays matrix, where N is number of rays
         """
+
         # First, transform into meridional
         meridional_matrix = matrices.transformation.meridional_transform(rays.phi)
 
         rays.propagate(self.front_focal_length)  # trace to first surface
-
-        # TODO remove, deprecated
-        # escape_mask_sine = abs(rays.rho) >= self.front_focal_length
-        # rays.escaped = np.logical_or(escape_mask_sine, rays.escaped)
-        # if any(escape_mask_sine):
-        #     print(np.sum(escape_mask_sine), "rays escaped (ray height > focal length)")
 
         escape_mask_sine = abs(rays.theta) >= np.arcsin(self.NA / self.n)
         rays.escaped = np.logical_or(escape_mask_sine, rays.escaped)
@@ -174,14 +166,6 @@ class SineLens(Element):
         rays.theta = new_theta  # assign new theta
         refract_matrix = matrices.optical_elements.lens_refraction_meridional(-lens_theta)
 
-        # EP = 2 * NA * fback = 2 * NA * f_front/n
-        # TODO revisit this, I am looking to use front focal length, this scaling might be a hack
-        # rays.rho *= self.n  # scale rho for immersion lens
-
-        # TODO small angle approximation - think about doing full arc-based calculation
-        # TODO maybe just update rays.area_elements
-        rays.area_scaling *= np.abs(np.cos(new_theta) / np.cos(old_theta))
-
         # Then transform back from meridional
         meridional_matrix_inv = matrices.transformation.meridional_transform(rays.phi, inverse=True)
 
@@ -191,6 +175,11 @@ class SineLens(Element):
 
         distance_to_plane = self.front_focal_length * (1 - np.cos(lens_theta))
         rays.propagate(distance_to_plane)  # trace to flat surface
+
+        # TODO small angle approximation - think about doing full arc-based calculation
+        # maybe even reverse the ray-tracing for even distribution on detector to decide initial rays
+        # TODO maybe just update rays.area_elements
+        rays.area_scaling *= np.abs(np.cos(new_theta) / np.cos(old_theta))
 
     def trace_f(self, rays: PolarRays):
         """Trace by one focal length. Calls rays.propagate now, so to deprecate TODO"""

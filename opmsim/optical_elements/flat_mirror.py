@@ -73,12 +73,6 @@ class FlatMirror(Element):
         p = self.normalize(p)
         r = self.normalize(r)
 
-        ax = plt.figure().add_subplot(projection='3d')
-        ax.quiver(0, 0, 0, N[0, 0, 0], N[0, 1, 0], N[0, 2, 0], color='red', label='N')
-        ax.quiver(0, 0, 0, p[0, 0, 0], p[0, 1, 0], p[0, 2, 0], color='blue', label='p')
-        ax.quiver(0, 0, 0, r[0, 0, 0], r[0, 1, 0], r[0, 2, 0], color='green', label='r')
-        ax.legend()
-
         parallel = r[:, :, 0]
         senkrecht = p[:, :, 0]
 

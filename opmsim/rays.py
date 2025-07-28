@@ -9,6 +9,7 @@ from math import ceil
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+from opmsim.matrices.transformation import lab_to_local_wavefront_basis, local_wavefront_to_lab_basis
 
 # vectorised version of ray
 class PolarRays:
@@ -145,10 +146,55 @@ class PolarRays:
         self.basis = basis
         self.update_polar_angles()
 
+    def lab_to_local_curved_basis(self, calculate_efield=True, inverse=False):
+        """
+        Calculate e-fields and k-vectors in a local basis defined on a curved wavefront surface,
+        the basis vectors describe the components that would be x and y after the curved
+        wavefront is mapped to a flat one i.e. after lens focusing.
+
+        Args:
+            calculate_efield (bool, optional): whether to update e-field directly. Defaults to True.
+            inverse (bool, optional): if True, go from curved basis to flat lab basis instead
+        """
+        to_local_matrix = lab_to_local_wavefront_basis(self.phi, self.theta, inverse=inverse)
+        bases = to_local_matrix @ np.identity(3)
+
+        # #### DEBUG PLOTS #### TODO remove when certain this is good
+        # zeros = np.zeros_like(bases[:, 0])
+        # plt.figure()
+        # plt.scatter(self.k_vec[:, 0], self.k_vec[:, 1])
+        # plt.show()
+        # f = plt.figure()
+        # ax = f.add_subplot(projection='3d')
+        # ax.quiver(self.k_vec[:, 0], self.k_vec[:, 1], self.k_vec[:, 2],
+        #           bases[:, 0], zeros, zeros, length=0.1)
+        # ax.quiver(self.k_vec[:, 0], self.k_vec[:, 1], self.k_vec[:, 2],
+        #           zeros, bases[:, 1], zeros, length=0.1, color='black')
+        # ax.quiver(self.k_vec[:, 0], self.k_vec[:, 1], self.k_vec[:, 2],
+        #           zeros, zeros, bases[:, 2], length=0.1, color='red')
+        # ax.set_box_aspect([1, 1, 1])
+        # plt.show()
+
+        self.k_vec = to_local_matrix @ self.k_vec
+        self.transfer_matrix = to_local_matrix @ self.transfer_matrix
+
+        if calculate_efield:
+            self.e_field = to_local_matrix @ self.e_field
+
+    def local_curved_to_lab_basis(self, calculate_efield=True):
+        """
+        Inverse of lab_to_local_curved_basis
+
+        Args:
+            calculate_efield (bool, optional): whether to update e-field directly. Defaults to True.
+        """
+        self.lab_to_local_curved_basis(calculate_efield, inverse=True)
+
     def update_polar_angles(self):
         """
         Use current k_vec to calculate theta and phi. k_vec is updated directly during tracing
         with matrices, but not necessarily theta and phi
+        Aim is to keep 0 < theta < pi/2 and 0 < phi < 2pi
         """
         self.theta = np.arccos(self.k_vec[:, 2]).flatten()
         self.phi = np.arctan2(self.k_vec[:, 1], self.k_vec[:, 0]).flatten()
@@ -156,6 +202,9 @@ class PolarRays:
         negative_theta = self.theta < 0  # mask to replace negative ray height with phi += pi
         self.theta[negative_theta] = -self.theta[negative_theta]
         self.phi[negative_theta] = (self.phi[negative_theta] + np.pi) % (2 * np.pi)
+
+        negative_phi = self.phi < 0  # ensure 0 < phi < 2pi
+        self.phi[negative_phi] = self.phi[negative_phi] + 2 * np.pi
 
     def calculate_intensity(self, scaling=None, scale_by_density=True):
         """

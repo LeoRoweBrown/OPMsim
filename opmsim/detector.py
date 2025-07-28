@@ -1,8 +1,8 @@
 import numpy as np
+from matplotlib import pyplot as plt
 from .tools import graphics
 from .visualization.pupil_plot import plot_pupil_intensity
 from .rays import PolarRays
-
 
 class Detector:
     """Like a photodetector, mapped to wavefront surface"""
@@ -41,6 +41,10 @@ class Detector:
 
         # Important to remove lost rays (also due to NaNs) and calculate final intensity
         rays.remove_escaped_rays()
+
+        # transformation to curved basis to evaluate intensity on curved surface
+        if self.curved:
+            rays.lab_to_local_curved_basis()
         rays.calculate_intensity()
 
         print(str(rays.n - rays.n_final) + " rays escaped out of " + str(rays.n))
@@ -53,6 +57,8 @@ class Detector:
         # squeeze to avoid broadcasting and (N,N) arrays instead of N
         self.Ix_raw = rays.intensity_per_dipole_vector[:, 0]
         self.Iy_raw = rays.intensity_per_dipole_vector[:, 1]
+        self.Iz_raw = rays.intensity_per_dipole_vector[:, 2]
+
         self.Ix_area_scaled = self.Ix_raw.squeeze() * rays.area_scaling
         self.Iy_area_scaled = self.Iy_raw.squeeze() * rays.area_scaling
 
@@ -61,12 +67,6 @@ class Detector:
         phi_1d = self.ray_phi.squeeze()
         self.x = self.ray_polar_radius * np.cos(phi_1d)
         self.y = self.ray_polar_radius * np.sin(phi_1d)
-
-        # TODO REMOVE, REMOVE BELOW
-        # if self.curved:
-        #     self.x, self.y = rays.k_vec[:, 0].flatten(), rays.k_vec[:, 1].flatten()
-        # else:
-        #     self.x, self.y = rays.pos[:, 0].flatten(), rays.pos[:, 1].flatten()
 
         self.rays = rays
         self.n_rays = rays.n_final
