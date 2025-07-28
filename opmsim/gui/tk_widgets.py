@@ -32,15 +32,17 @@ class ElementFrame(tk.Frame):
         self.idx_label.set(f'{index}')
 
 class ScrollableFrame(tk.Frame):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, scrollbar_width=20, **kwargs):
         super().__init__(parent, **kwargs)
         # Create container, frame canvas that can scroll, and frame containing the list
-        self.element_list_canvas = tk.Canvas(
-            self, width=280, highlightbackground="gray", highlightthickness=2)
         width = self.winfo_reqwidth()  # double check this
-        self.element_list_scrollbar = tk.Scrollbar(self, width=20)
+        list_frame_width = width - scrollbar_width
+
+        self.element_list_canvas = tk.Canvas(
+            self, width=list_frame_width, highlightbackground="gray", highlightthickness=2)
+        self.element_list_scrollbar = tk.Scrollbar(self, width=scrollbar_width)
         self.element_list_frame = tk.Frame(
-            self.element_list_canvas, width=(width - 20), highlightbackground="gray", highlightthickness=2)
+            self.element_list_canvas, width=(width - scrollbar_width))
         element_list_title = tk.Label(self, text="Element list")
 
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=0, pady=0)

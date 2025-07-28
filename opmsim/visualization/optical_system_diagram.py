@@ -11,23 +11,25 @@ class OpticalSystemDiagram:
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot()
         self.ax.set_aspect('equal')
-        self.max_pupil_height = 0
+        self.max_pupil_radius = 0
         self.drawn_element_objs = []
         self.ray_plot_refs = []
         self.element_plot_refs = []
         self.plot_only_in_plane = True  # TODO not really used right now
         self.optical_system = system
+        self.estimate_max_pupil_height()
 
     def set_optical_system(self, system: OpticalSystem):
         """Setter to make clearer the intent to update the optical system that is plotted"""
         self.optical_system = system
+        self.estimate_max_pupil_height()  # update pupil height calculation
 
     def estimate_max_pupil_height(self):
-        max_pupil_height = 0
+        max_pupil_diameter = 0
         for element in self.optical_system.elements:
             if isinstance(element, SineLens):
-                max_pupil_height = max(element.D, max_pupil_height)
-        return max_pupil_height
+                max_pupil_diameter = max(element.D, max_pupil_diameter)
+        self.max_pupil_radius = max_pupil_diameter / 2
 
     def clear_rays(self):
         for plot in self.ray_plot_refs:
@@ -65,9 +67,13 @@ class OpticalSystemDiagram:
     def draw_element(self, element, **kwargs):
         print("drawing", element)
         if isinstance(element, SineLens):
+            print("plotting", element, "as SineLens")
             plot_ = draw_elements.draw_sine_lens(self.ax, element)
-        if isinstance(element, FlatMirror):
-            plot_ = draw_elements.draw_line_element(self.ax, element, pupil_radius=self.max_pupil_height)
+        elif isinstance(element, FlatMirror):
+            print("plotting", element, "as FlatMirror")
+            plot_ = draw_elements.draw_line_element(
+                self.ax, element, rot_y=element.rot_y, pupil_radius=self.max_pupil_radius)
         else:
-            plot_ = draw_elements.draw_line_element(self.ax, element, pupil_radius=self.max_pupil_height)
+            print("plotting", element, "as (flat) Element")
+            plot_ = draw_elements.draw_line_element(self.ax, element, pupil_radius=self.max_pupil_radius)
         self.element_plot_refs += plot_  # the plot_ is returned as a list, so add not append

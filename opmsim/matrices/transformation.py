@@ -26,7 +26,15 @@ def meridional_transform(phi, inverse=False):
         meridional_tensor[n, :, :] = meridional_matrix
     return meridional_tensor
 
-def rotate_y(theta):
+def rotate_y(theta: float):
+    """Rotate vector about y-axis by theta rads
+
+    Args:
+        theta (float): angle to rotate by in radians
+
+    Returns:
+        numpy.ndarray: y-rotation transformation matrix
+    """
     matrix = np.array([
         [np.cos(theta), 0, np.sin(theta)],
         [0, 1, 0],
@@ -36,12 +44,7 @@ def rotate_y(theta):
 
 def arbitrary_rotation(theta, ux, uy, uz):
     """
-
-    :param theta:
-    :param ux:
-    :param uy:
-    :param uz:
-    :return:
+    Not implemented
     """
     # TODO fix implementation with for loop, the safest way. not currently used though.
     raise NotImplementedError

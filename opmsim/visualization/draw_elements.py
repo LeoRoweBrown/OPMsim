@@ -1,3 +1,7 @@
+# Functions to populate a matplotlib axis with simple 2D drawings of optical elements
+# Current just the curved and flat principal planes of a "SineLens" and a flat, line element for
+# waveplantes, linear polarisers, mirrors etc.
+
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import axes
@@ -10,7 +14,17 @@ def draw_sine_lens(ax: axes.Axes, sine_lens: SineLens, view='xz', color='k'):
     Draw sine lnes on system plot.
     Note currently only xz view is supported, and rotation about y (from mirror or objective tilt),
     the local y values of the surfaces is just assumed to be 0, i.e. curve in xz plane, but in reality
-    it is a spherical caps and a plane"""
+    it is a spherical caps and a plane
+
+    Args:
+        ax (matplotlib.axes.Axes): matplotlib axis
+        sine_lens (SineLens): SineLens element to depict on ax
+        view (str, optional): plane of the diagram, e.g. xy, yz, xz. Currently on supports xz. Defaults to 'xz'.
+        color (str, optional): colour of element. Defaults to 'k'.
+
+    Returns:
+        list[matplotlib.lines.Line2D]: list of line objects, including te curved and flat lines
+    """
     x, y, z = sine_lens.coords
     max_sine_theta = (sine_lens.NA / sine_lens.n)
     max_theta = np.arcsin(max_sine_theta)
@@ -59,7 +73,21 @@ def draw_sine_lens(ax: axes.Axes, sine_lens: SineLens, view='xz', color='k'):
     plot_f = ax.plot(flat_surface[2, :] + z, flat_surface[0, :] + x, color=color)
     return plot_c + plot_f  # plot returns list, so add to concat
 
-def draw_line_element(ax: axes.Axes, element: Element, pupil_radius, rot_y=0, view='xz', color='k'):
+def draw_line_element(ax: axes.Axes, element: Element, pupil_radius, rot_y=0., view='xz', color='k'):
+    """
+    Draw element that can be represented by a line
+
+    Args:
+        ax (matplotlib.axes.Axes): matplotlib axis
+        element (Element): element to depict on plot
+        pupil_radius (float): radius of pupil and half-height of the line
+        rot_y (float, optional): rotation of the line in degrees, e.g., for when a mirror is tilted. Defaults to 0.
+        view (str, optional): plane of the diagram, e.g. xy, yz, xz. Currently on supports xz. Defaults to 'xz'.
+        color (str, optional): colour of element. Defaults to 'k'.
+
+    Returns:
+        list[matplotlib.lines.Line2D]: list of line objects returned by ax.plot
+    """
     x, y, z = element.coords
     surface_z = np.array([0, 0])
     surface_y = np.array([0, 0])
@@ -68,6 +96,6 @@ def draw_line_element(ax: axes.Axes, element: Element, pupil_radius, rot_y=0, vi
         surface_x,
         surface_y,
         surface_z])
-    surface = element.basis @ rotate_y(rot_y) @ surface
+    surface = element.basis @ rotate_y(rot_y * np.pi / 180) @ surface
     plot_f = ax.plot(surface[2, :] + z, surface[0, :] + x, color=color)
     return plot_f
