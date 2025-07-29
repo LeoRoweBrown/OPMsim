@@ -33,7 +33,7 @@ class OpticalSystem():
         self.detector: Optional[Detector] = None
         self.pupil_plot = None
         self.auto_orient_lenses = True
-        self.ray_generation_method = 'fibonacci'
+        self.ray_generation_method = 'rings'
         self.debug_plots = False
 
         # current date for debug file

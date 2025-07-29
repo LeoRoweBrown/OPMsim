@@ -93,7 +93,7 @@ class SystemDesignerApp():
 
     def init_main_sim_bar(self):
         """
-        Initialise frame containing system diagram and raytracing (and buttons to run simulation)
+        Initialise frame containing system diagram and raytracing (and buttons to run simulation) (1/3)
         """
         self.main_sim_frame = tk.Frame(self.main_frame, width=620, highlightbackground="gray", highlightthickness=2)
         self.main_sim_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
@@ -146,7 +146,7 @@ class SystemDesignerApp():
         self.element_list_and_config_container = tk.Frame(
             self.main_frame, width=320, highlightbackground="gray", highlightthickness=2)
         self.element_list_and_config_container.pack(side=tk.LEFT, fill=tk.BOTH, padx=10, pady=10)
-        self.element_list_and_config_container.pack_propagate(False)  # Prevent the frame from resizing to fit child widgets
+        self.element_list_and_config_container.pack_propagate(False)  # Prevent frame from resizing to fit child widgets
 
         self.init_element_list_widget(self.element_list_and_config_container)
         self.init_add_element_widget(self.element_list_and_config_container)
@@ -165,6 +165,7 @@ class SystemDesignerApp():
         options = {}
         options_str = ''
         # var is the StringVar or BooleanVar from tkinter, i.e. the value set in the GUI
+        # Could use self.element_info[name]['current_kwargs'] as well as self.current_config_vars
         for n, var in enumerate(self.current_config_vars):
             kw = var['arg_name']
             val = var['arg_var'].get()
@@ -173,7 +174,6 @@ class SystemDesignerApp():
                 continue
             options[kw] = (a_type)(val)
             options_str += f'{kw}: {val}, '
-        options = self.element_info[name]['current_kwargs']
         try:
             element = Element(**options)  # keywords passed to instantiation of Element (e.g. SineLens)
         except Exception as e:
